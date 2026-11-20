@@ -66,7 +66,7 @@ export default function MilestonesPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
             <button
               onClick={() => { setMilestoneToEdit(null); setShowAddModal(true); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -166,7 +166,7 @@ export default function MilestonesPage() {
 
                   {/* Right Actions & Timeline */}
                   <div className="flex items-center gap-3 sm:self-center">
-                    {(currentUser.role === 'admin' || currentUser.role === 'mentor') && !isDone && (
+                    {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && !isDone && (
                       <button
                         onClick={() => handleQuickApprove(m)}
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
@@ -176,7 +176,7 @@ export default function MilestonesPage() {
                       </button>
                     )}
 
-                    {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+                    {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
                       <button
                         onClick={() => { setMilestoneToEdit(m); setShowAddModal(true); }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100"

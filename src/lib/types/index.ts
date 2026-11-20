@@ -3,7 +3,11 @@
 // Comprehensive TypeScript Definitions
 // ==============================================================================
 
-export type UserRole = 'admin' | 'mentor' | 'student';
+export type UserRole = 'admin' | 'staff' | 'mentor' | 'student';
+
+export function hasAdminPrivileges(role?: UserRole | string): boolean {
+  return role === 'admin' || role === 'staff';
+}
 
 export interface UserProfile {
   id: string;

@@ -4,6 +4,7 @@ import { UserRole } from '@/lib/types';
 export function RoleBadge({ role }: { role: UserRole }) {
   const styles: Record<UserRole, string> = {
     admin: 'bg-navy-900 text-white border-navy-800',
+    staff: 'bg-indigo-700 text-white border-indigo-600',
     mentor: 'bg-blue-700 text-white border-blue-600',
     student: 'bg-emerald-700 text-white border-emerald-600'
   };

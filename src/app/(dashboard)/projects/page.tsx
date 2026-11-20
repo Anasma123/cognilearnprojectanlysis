@@ -199,7 +199,7 @@ export default function ProjectsPage() {
                       >
                         <FileDown className="w-4 h-4" />
                       </button>
-                      {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+                      {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
                         <button
                           onClick={() => handleOpenEdit(project)}
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"

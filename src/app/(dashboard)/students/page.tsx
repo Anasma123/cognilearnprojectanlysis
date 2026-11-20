@@ -93,7 +93,7 @@ export default function StudentsPage() {
             Export Excel
           </button>
 
-          {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
             <button
               onClick={() => { setStudentToEdit(null); setShowAddModal(true); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -269,7 +269,7 @@ export default function StudentsPage() {
                         >
                           <FileDown className="w-4 h-4" />
                         </button>
-                        {currentUser.role === 'admin' && (
+                        {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                           <>
                             <button
                               onClick={() => { setStudentToEdit(student); setShowAddModal(true); }}

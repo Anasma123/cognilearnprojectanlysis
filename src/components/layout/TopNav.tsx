@@ -84,8 +84,8 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
     { title: 'Settings & Supabase', href: '/settings', icon: Settings, adminOnly: true }
   ];
 
-  const filteredPrimary = primaryNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin');
-  const filteredMore = moreNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin');
+  const filteredPrimary = primaryNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin' || currentUser.role === 'staff');
+  const filteredMore = moreNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin' || currentUser.role === 'staff');
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
@@ -201,6 +201,16 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
                     <span>Administrator</span>
                   </div>
                   {currentUser.role === 'admin' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                </button>
+                <button
+                  onClick={() => { switchRole('staff'); setShowRoleMenu(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer ${currentUser.role === 'staff' ? 'font-bold text-indigo-600 bg-indigo-50/50' : 'text-slate-700'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <UserCog className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Staff (Admin Powers)</span>
+                  </div>
+                  {currentUser.role === 'staff' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
                 </button>
                 <button
                   onClick={() => { switchRole('mentor'); setShowRoleMenu(false); }}

@@ -495,7 +495,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                           </span>
                         </div>
 
-                        {!isLeader && currentUser.role === 'admin' && (
+                        {!isLeader && (currentUser.role === 'admin' || currentUser.role === 'staff') && (
                           <button
                             onClick={() => updateGroup(group.id, { group_leader_id: member.id })}
                             className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded border border-slate-200 transition-colors"
@@ -578,7 +578,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                 </p>
               </div>
 
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                 <button
                   onClick={() => setShowAddMilestoneModal(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
@@ -624,7 +624,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                     <div className="flex items-center gap-3">
                       <StatusBadge status={ms.status} />
 
-                      {currentUser.role === 'admin' && (
+                      {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                         <div className="flex items-center gap-1">
                           {ms.status !== 'completed' ? (
                             <button
@@ -787,7 +787,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                         Submitted by: {report.submitter?.full_name || 'Group Leader'} on {formatDateIndian(report.submitted_at)}
                       </span>
 
-                      {currentUser.role === 'admin' && (
+                      {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                         <button
                           onClick={() => {
                             setShowReviewReportModal(report);
@@ -818,7 +818,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                 </p>
               </div>
 
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                 <button
                   onClick={handleOpenAttendanceModal}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
@@ -863,7 +863,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                 </p>
               </div>
 
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                 <button
                   onClick={() => {
                     const firstStudent = groupMembers[0];

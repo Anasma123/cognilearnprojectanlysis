@@ -64,7 +64,7 @@ export default function DashboardPage() {
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
-          {currentUser.role === 'admin' && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
             <>
               <button
                 onClick={() => setShowAttendanceModal(true)}

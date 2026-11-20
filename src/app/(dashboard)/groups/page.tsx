@@ -67,7 +67,7 @@ export default function GroupsPage() {
             Export Excel
           </button>
 
-          {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
             <button
               onClick={() => { setGroupToEdit(null); setShowAddModal(true); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -168,7 +168,7 @@ export default function GroupsPage() {
                   >
                     <FileDown className="w-4 h-4" />
                   </button>
-                  {currentUser.role === 'admin' && (
+                  {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                     <>
                       <button
                         onClick={() => { setGroupToEdit(group); setShowAddModal(true); }}

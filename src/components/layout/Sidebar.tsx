@@ -44,28 +44,28 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/dashboard',
       icon: LayoutDashboard,
       badge: null,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Students',
       href: '/students',
       icon: GraduationCap,
       badge: stats.totalStudents,
-      roles: ['admin', 'mentor']
+      roles: ['admin', 'staff', 'mentor']
     },
     {
       title: 'Groups',
       href: '/groups',
       icon: Users,
       badge: stats.totalGroups,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Projects',
       href: '/projects',
       icon: FolderKanban,
       badge: stats.totalActiveProjects,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Payments',
@@ -73,14 +73,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CreditCard,
       badge: pendingPaymentsCount > 0 ? `${pendingPaymentsCount} Due` : 'All Paid',
       badgeAlert: pendingPaymentsCount > 0,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Staff & Admins',
       href: '/staff',
       icon: UserCog,
       badge: staffMembers.length,
-      roles: ['admin']
+      roles: ['admin', 'staff']
     },
     {
       title: 'Tasks',
@@ -88,14 +88,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: ListTodo,
       badge: stats.pendingTasks > 0 ? `${stats.pendingTasks}` : null,
       badgeAlert: stats.overdueTasks > 0,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Milestones',
       href: '/milestones',
       icon: Milestone,
       badge: null,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Weekly Progress',
@@ -103,35 +103,35 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CalendarCheck2,
       badge: stats.weeklyUpdatesPendingReview > 0 ? `${stats.weeklyUpdatesPendingReview} pending` : null,
       badgeAlert: stats.weeklyUpdatesPendingReview > 0,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Attendance',
       href: '/attendance',
       icon: CalendarDays,
       badge: `${stats.overallAttendancePercentage}%`,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Analytics',
       href: '/analytics',
       icon: LineChart,
       badge: null,
-      roles: ['admin', 'mentor']
+      roles: ['admin', 'staff', 'mentor']
     },
     {
       title: 'Documents',
       href: '/documents',
       icon: FileText,
       badge: null,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Reports',
       href: '/reports',
       icon: FileBarChart,
       badge: null,
-      roles: ['admin', 'mentor']
+      roles: ['admin', 'staff', 'mentor']
     },
     {
       title: 'Notifications',
@@ -139,14 +139,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: Bell,
       badge: unreadCount > 0 ? `${unreadCount}` : null,
       badgeAlert: unreadCount > 0,
-      roles: ['admin', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Settings & Database',
       href: '/settings',
       icon: Settings,
       badge: null,
-      roles: ['admin']
+      roles: ['admin', 'staff']
     }
   ];
 

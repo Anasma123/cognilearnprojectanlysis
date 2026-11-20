@@ -9,7 +9,7 @@ export default function Home() {
   useEffect(() => {
     try {
       const auth = typeof window !== 'undefined' ? localStorage.getItem('cognilearn_auth') : null;
-      if (auth === 'admin') {
+      if (auth === 'admin' || auth === 'staff') {
         router.replace('/dashboard');
       } else {
         router.replace('/login');

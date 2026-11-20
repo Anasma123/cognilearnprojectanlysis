@@ -148,12 +148,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (auth === 'admin') {
         setIsAuthenticated(true);
         setCurrentUser(initialProfiles[0]);
+      } else if (auth === 'staff') {
+        setIsAuthenticated(true);
+        setCurrentUser(initialProfiles[1] || {
+          id: '00000000-0000-0000-0000-000000000002',
+          email: 'staff@cognilearn.org',
+          full_name: 'Staff Coordinator',
+          role: 'staff',
+          phone: '+91 98470 55667',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
       }
     }
   }, []);
 
   const login = (username: string, pass: string): boolean => {
     const cleanUser = username.trim().toLowerCase();
+
+    // 1. Admin login: admin / 123
     if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && pass === '123') {
       setIsAuthenticated(true);
       setCurrentUser(initialProfiles[0]);
@@ -162,6 +176,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return true;
     }
+
+    // 2. Staff login: staff / 123
+    if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && pass === '123') {
+      setIsAuthenticated(true);
+      const staffUser: UserProfile = initialProfiles[1] || {
+        id: '00000000-0000-0000-0000-000000000002',
+        email: 'staff@cognilearn.org',
+        full_name: 'Staff Coordinator',
+        role: 'staff',
+        phone: '+91 98470 55667',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      setCurrentUser(staffUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cognilearn_auth', 'staff');
+      }
+      return true;
+    }
+
+    // 3. Dynamic staff member login (any staff email or name added by admin)
+    const matchedStaff = staffMembers.find(
+      s => (s.email.toLowerCase() === cleanUser || s.full_name.toLowerCase() === cleanUser) && s.is_active
+    );
+    if (matchedStaff && pass === '123') {
+      setIsAuthenticated(true);
+      const dynamicUser: UserProfile = {
+        id: matchedStaff.id,
+        email: matchedStaff.email,
+        full_name: matchedStaff.full_name,
+        role: matchedStaff.role === 'admin' ? 'admin' : 'staff',
+        phone: matchedStaff.phone,
+        avatar_url: matchedStaff.avatar_url,
+        is_active: true,
+        created_at: matchedStaff.created_at,
+        updated_at: matchedStaff.updated_at
+      };
+      setCurrentUser(dynamicUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cognilearn_auth', matchedStaff.role === 'admin' ? 'admin' : 'staff');
+      }
+      return true;
+    }
+
     return false;
   };
 
@@ -327,9 +386,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const switchRole = (role: UserRole) => {
     if (role === 'admin') {
       setCurrentUser(initialProfiles[0]);
+    } else if (role === 'staff') {
+      setCurrentUser(initialProfiles[1] || {
+        id: '00000000-0000-0000-0000-000000000002',
+        email: 'staff@cognilearn.org',
+        full_name: 'Staff Coordinator',
+        role: 'staff',
+        phone: '+91 98470 55667',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
     } else if (role === 'mentor') {
       setCurrentUser({
-        id: '00000000-0000-0000-0000-000000000002',
+        id: '00000000-0000-0000-0000-000000000003',
         email: 'mentor@cognilearn.org',
         full_name: 'Project Mentor',
         role: 'mentor',

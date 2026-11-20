@@ -134,7 +134,7 @@ export default function WeeklyProgressPage() {
 
                 {/* Mentor Review Action Button */}
                 <div className="flex items-center gap-2">
-                  {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+                  {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
                     <button
                       onClick={() => setReportForReview(report)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-semibold transition-colors"

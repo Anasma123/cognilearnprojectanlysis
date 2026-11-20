@@ -171,7 +171,7 @@ export default function DocumentsPage() {
                   View File
                 </a>
 
-                {currentUser.role === 'admin' && (
+                {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                   <button
                     onClick={() => deleteDocument(doc.id)}
                     className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600"

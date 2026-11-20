@@ -130,7 +130,7 @@ export default function StaffPage() {
           </p>
         </div>
 
-        {currentUser.role === 'admin' && (
+        {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
           <button
             onClick={handleOpenAdd}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -258,7 +258,7 @@ export default function StaffPage() {
                 <span className="text-slate-500 font-medium">{staff.is_active ? 'Active' : 'Inactive'}</span>
               </div>
 
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleOpenEdit(staff)}

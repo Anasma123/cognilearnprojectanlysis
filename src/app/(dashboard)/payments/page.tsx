@@ -211,7 +211,7 @@ export default function PaymentsPage() {
             Export Ledger (CSV)
           </button>
 
-          {currentUser.role === 'admin' && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
             <button
               onClick={() => handleOpenRecordModal()}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -421,7 +421,7 @@ export default function PaymentsPage() {
                             <History className="w-4 h-4" />
                           </button>
 
-                          {currentUser.role === 'admin' && p.balance_amount > 0 && (
+                          {(currentUser.role === 'admin' || currentUser.role === 'staff') && p.balance_amount > 0 && (
                             <button
                               onClick={() => handleOpenRecordModal(p.student_id)}
                               className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded font-semibold text-[11px] transition-colors"

@@ -111,7 +111,7 @@ export default function AttendancePage() {
             PDF Report
           </button>
 
-          {(currentUser.role === 'admin' || currentUser.role === 'mentor') && (
+          {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
             <button
               onClick={() => setShowMarkModal(true)}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -279,7 +279,7 @@ export default function AttendancePage() {
                       {record.remarks || '-'}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {currentUser.role === 'admin' && (
+                      {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
                         <button
                           onClick={() => {
                             setRecordToEdit(record);

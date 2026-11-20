@@ -20,6 +20,7 @@ import {
 } from '../types';
 
 // Admin account: username = admin, password = 123
+// Staff account: username = staff, password = 123
 export const initialProfiles: UserProfile[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
@@ -28,6 +29,17 @@ export const initialProfiles: UserProfile[] = [
     role: 'admin',
     phone: '+91 98470 11223',
     avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000002',
+    email: 'staff@cognilearn.org',
+    full_name: 'Staff Coordinator',
+    role: 'staff',
+    phone: '+91 98470 55667',
+    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -60,6 +72,18 @@ export const initialStaff: StaffMember[] = [
     role: 'admin',
     designation: 'Operations Director',
     department: 'Management',
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'staff-coord-02',
+    full_name: 'Staff Coordinator',
+    email: 'staff@cognilearn.org',
+    phone: '+91 98470 55667',
+    role: 'staff',
+    designation: 'Staff In-Charge & Project Coordinator',
+    department: 'Academic Supervision',
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
