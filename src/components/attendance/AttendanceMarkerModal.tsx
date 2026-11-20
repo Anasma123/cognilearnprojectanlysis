@@ -101,7 +101,9 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
             >
               {groups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>
+                <option key={g.id} value={g.id}>
+                  {g.name} ({g.group_code}) {g.college?.name ? `• ${g.college.name}` : ''}
+                </option>
               ))}
             </select>
           </div>

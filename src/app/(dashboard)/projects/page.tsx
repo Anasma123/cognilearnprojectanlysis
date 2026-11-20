@@ -18,14 +18,16 @@ import {
   Sparkles,
   CheckCircle2,
   TrendingUp,
-  Cpu
+  Cpu,
+  Trash2
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, groups, milestones, evaluations, updateProject, currentUser } = useApp();
+  const { projects, groups, milestones, evaluations, updateProject, deleteProject, currentUser } = useApp();
 
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   // Form state for editing project
   const [editForm, setEditForm] = useState({
@@ -207,6 +209,15 @@ export default function ProjectsPage() {
                           Manage
                         </button>
                       )}
+                      {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
+                        <button
+                          onClick={() => setProjectToDelete(project)}
+                          title="Delete Project Portfolio"
+                          className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -338,6 +349,45 @@ export default function ProjectsPage() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && (
+        <Modal
+          isOpen={true}
+          onClose={() => setProjectToDelete(null)}
+          title="Delete Project Portfolio"
+          subtitle="Remove project blueprint and associated deliverables"
+          maxWidth="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete <strong className="text-slate-900">{projectToDelete.title}</strong> ({projectToDelete.project_code})?
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+              Note: Academic projects require assigned students. Projects with no assigned students are automatically pruned.
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setProjectToDelete(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteProject(projectToDelete.id);
+                  setProjectToDelete(null);
+                }}
+                className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                Delete Project
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

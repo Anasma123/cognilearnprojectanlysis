@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { Group, GroupStatus } from '@/lib/types';
 import { useApp } from '@/lib/context/AppContext';
-import { Users, UserCheck, ShieldCheck, Search, CheckSquare, Square } from 'lucide-react';
+import { Users, UserCheck, ShieldCheck, Search, CheckSquare, Square, Lock, AlertCircle } from 'lucide-react';
 
 interface GroupModalProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ interface GroupModalProps {
 }
 
 export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
-  const { colleges, courses, staffMembers, students, createGroup, updateGroup, addCollege, addCourse } = useApp();
+  const { colleges, courses, staffMembers, students, groups, createGroup, updateGroup, addCollege, addCourse } = useApp();
 
   const [formData, setFormData] = useState({
     group_code: '',
@@ -37,6 +37,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
 
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
+  const [filterMode, setFilterMode] = useState<'available' | 'all' | 'selected'>('available');
 
   useEffect(() => {
     if (groupToEdit) {
@@ -78,7 +79,24 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
     setStudentSearch('');
   }, [groupToEdit, isOpen, colleges, courses, staffMembers, students]);
 
+  // Check if a student already belongs to another group (excluding current editing group)
+  const getStudentEnrolledGroup = (studentId: string) => {
+    return (groups || []).find(g => {
+      if (groupToEdit && g.id === groupToEdit.id) return false;
+      const isMember = Array.isArray(g.member_ids) && g.member_ids.includes(studentId);
+      const studentObj = students.find(s => s.id === studentId);
+      const isDirectGroup = studentObj?.group_id === g.id && (!groupToEdit || g.id !== groupToEdit.id);
+      return isMember || isDirectGroup;
+    });
+  };
+
   const toggleStudentSelection = (studentId: string) => {
+    const enrolledOther = getStudentEnrolledGroup(studentId);
+    if (enrolledOther) {
+      alert(`Student is already assigned to "${enrolledOther.name} (${enrolledOther.group_code})". Students existing in a group are not allowed to be part of another group.`);
+      return;
+    }
+
     setSelectedStudentIds(prev => {
       const exists = prev.includes(studentId);
       const updated = exists ? prev.filter(id => id !== studentId) : [...prev, studentId];
@@ -108,6 +126,17 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
     e.preventDefault();
     if (!formData.name || !formData.group_code) {
       alert('Please fill group code and name');
+      return;
+    }
+
+    if (selectedStudentIds.length === 0) {
+      alert('Please select at least one student. A group must have assigned students to activate and maintain a project.');
+      return;
+    }
+
+    const conflictingStudents = selectedStudentIds.filter(id => !!getStudentEnrolledGroup(id));
+    if (conflictingStudents.length > 0) {
+      alert('Some selected students already belong to another group. Students existing in a group cannot be part of another group.');
       return;
     }
 
@@ -142,12 +171,27 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
     onClose();
   };
 
-  // Filter students for the selector: show students matching search
-  const availableStudents = students.filter(s => {
-    const matchesSearch = s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      s.student_reg_no.toLowerCase().includes(studentSearch.toLowerCase());
-    return matchesSearch;
-  });
+  const availableStudentsCount = useMemo(() => {
+    return students.filter(s => !getStudentEnrolledGroup(s.id)).length;
+  }, [students, groups, groupToEdit]);
+
+  // Filter students for the selector
+  const availableStudents = useMemo(() => {
+    return students.filter(s => {
+      const matchesSearch = s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+        s.student_reg_no.toLowerCase().includes(studentSearch.toLowerCase());
+      if (!matchesSearch) return false;
+
+      const enrolledOther = getStudentEnrolledGroup(s.id);
+      if (filterMode === 'available') {
+        return !enrolledOther;
+      }
+      if (filterMode === 'selected') {
+        return selectedStudentIds.includes(s.id);
+      }
+      return true;
+    });
+  }, [students, studentSearch, filterMode, selectedStudentIds, groups, groupToEdit]);
 
   const selectedStudents = students.filter(s => selectedStudentIds.includes(s.id));
 
@@ -345,17 +389,17 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
 
         {/* Student Multi-Selection Section */}
         <div className="pt-2 border-t border-slate-100">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
             <div>
               <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider">
                 Select Group Members ({selectedStudentIds.length} Selected)
               </label>
               <p className="text-[11px] text-slate-500">
-                Check students to cluster them into this group. You can appoint the team leader from them.
+                Students can only belong to one group. Students already assigned to other groups are locked.
               </p>
             </div>
 
-            <div className="relative w-48">
+            <div className="relative w-full sm:w-48">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -367,27 +411,76 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
             </div>
           </div>
 
-          <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <button
+              type="button"
+              onClick={() => setFilterMode('available')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                filterMode === 'available'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Available ({availableStudentsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode('selected')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                filterMode === 'selected'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Selected ({selectedStudentIds.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode('all')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                filterMode === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All Students ({students.length})
+            </button>
+          </div>
+
+          <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
             {availableStudents.length === 0 ? (
               <div className="p-4 text-center text-xs text-slate-400">
-                {students.length === 0 ? 'No students enrolled yet. Please add students first.' : 'No matching students found.'}
+                {students.length === 0
+                  ? 'No students enrolled yet. Please add students first.'
+                  : filterMode === 'available'
+                  ? 'No unassigned students available. All students already belong to groups.'
+                  : 'No matching students found.'}
               </div>
             ) : (
               availableStudents.map((student) => {
                 const isSelected = selectedStudentIds.includes(student.id);
                 const isLeader = formData.group_leader_id === student.id;
+                const enrolledOther = getStudentEnrolledGroup(student.id);
 
                 return (
                   <div
                     key={student.id}
                     onClick={() => toggleStudentSelection(student.id)}
-                    className={`p-2.5 px-3 flex items-center justify-between cursor-pointer transition-colors text-xs ${
-                      isSelected ? 'bg-blue-50/80' : 'hover:bg-white'
+                    className={`p-2.5 px-3 flex items-center justify-between transition-colors text-xs ${
+                      enrolledOther
+                        ? 'bg-slate-100/70 opacity-60 cursor-not-allowed select-none'
+                        : isSelected
+                        ? 'bg-blue-50/80 cursor-pointer hover:bg-blue-100/60'
+                        : 'cursor-pointer hover:bg-white'
                     }`}
+                    title={enrolledOther ? `Already assigned to ${enrolledOther.name} (${enrolledOther.group_code})` : undefined}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="text-blue-600">
-                        {isSelected ? (
+                      <div className={enrolledOther ? 'text-slate-400' : 'text-blue-600'}>
+                        {enrolledOther ? (
+                          <Lock className="w-4 h-4 text-slate-400" />
+                        ) : isSelected ? (
                           <CheckSquare className="w-4 h-4 text-blue-600" />
                         ) : (
                           <Square className="w-4 h-4 text-slate-300" />
@@ -399,7 +492,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
                         className="w-7 h-7 rounded-full object-cover"
                       />
                       <div>
-                        <span className="font-bold text-slate-900">{student.full_name}</span>
+                        <span className={`font-bold ${enrolledOther ? 'text-slate-600' : 'text-slate-900'}`}>{student.full_name}</span>
                         <span className="text-[11px] text-slate-500 ml-2 font-mono">{student.student_reg_no}</span>
                       </div>
                     </div>
@@ -410,9 +503,10 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
                           Leader
                         </span>
                       )}
-                      {student.group_id && student.group_id !== groupToEdit?.id && (
-                        <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px]">
-                          In another group
+                      {enrolledOther && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-semibold border border-slate-300">
+                          <Lock className="w-2.5 h-2.5 text-slate-500" />
+                          Assigned: {enrolledOther.group_code || enrolledOther.name}
                         </span>
                       )}
                     </div>

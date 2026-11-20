@@ -74,7 +74,7 @@ export function generateStudentProfilePdf(student: Student) {
     ['Email', student.email, 'Phone', student.phone || 'N/A'],
     ['College', student.college?.name || 'MES College', 'Class / Year', student.class_year],
     ['Department', student.department, 'Group Assigned', student.group?.group_code || 'Unassigned'],
-    ['Assigned Role', student.assigned_role, 'Project Code', student.group?.project?.project_code || 'N/A'],
+    ['Assigned Role', student.assigned_role || 'Unassigned', 'Project Code', student.group?.project?.project_code || 'N/A'],
   ];
 
   autoTable(doc, {
@@ -144,7 +144,7 @@ export function generateGroupSummaryPdf(group: Group, project?: Project, weeklyR
     idx + 1,
     m.student_reg_no,
     m.full_name,
-    m.assigned_role,
+    m.assigned_role || 'Member',
     m.email,
     m.phone || '-'
   ]);
@@ -410,7 +410,7 @@ export function generateCollegeReportPdf({
       s.full_name,
       s.course?.name || s.department || 'N/A',
       grp?.group_code || 'Unassigned',
-      s.assigned_role,
+      s.assigned_role || 'Member',
       `INR ${paidAmt.toLocaleString('en-IN')}`,
       dueAmt === 0 ? 'PAID' : `INR ${dueAmt.toLocaleString('en-IN')}`,
       (s.status || 'active').toUpperCase()

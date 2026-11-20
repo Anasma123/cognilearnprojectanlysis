@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -20,14 +20,32 @@ export function AnalyticsCharts() {
   const { projects, groups, attendance } = useApp();
 
   // 1. Group-wise progress comparison data
-  const progressData = projects.map(p => {
-    const grp = groups.find(g => g.id === p.group_id);
-    return {
-      name: grp?.group_code || p.project_code,
-      title: p.title.length > 25 ? p.title.substring(0, 25) + '...' : p.title,
-      progress: p.progress_percentage
-    };
-  });
+  const progressData = useMemo(() => {
+    if (groups && groups.length > 0) {
+      return groups.map(g => {
+        const proj = projects.find(p => p && p.group_id === g.id) || g.project;
+        return {
+          name: g.group_code || g.name,
+          title: proj?.title || g.project_title || g.name,
+          progress: proj?.progress_percentage ?? 0
+        };
+      });
+    }
+    return (projects || []).map(p => {
+      const grp = (groups || []).find(g => g && g.id === p.group_id);
+      return {
+        name: grp?.group_code || p.project_code || 'Project',
+        title: p.title || 'Dissertation',
+        progress: p.progress_percentage ?? 0
+      };
+    });
+  }, [groups, projects]);
+
+  const termAvg = useMemo(() => {
+    if (progressData.length === 0) return 0;
+    const total = progressData.reduce((acc, d) => acc + (d.progress || 0), 0);
+    return Math.round(total / progressData.length);
+  }, [progressData]);
 
   // 2. Attendance distribution data
   const presentCount = attendance.filter(a => a.status === 'present').length;
@@ -52,7 +70,7 @@ export function AnalyticsCharts() {
             <p className="text-xs text-slate-500">Calculated objectively from completed milestone phases & tasks</p>
           </div>
           <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold">
-            Term Avg: {Math.round(projects.reduce((acc, p) => acc + p.progress_percentage, 0) / (projects.length || 1))}%
+            Term Avg: {termAvg}%
           </span>
         </div>
 

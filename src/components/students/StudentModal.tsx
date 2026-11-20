@@ -61,7 +61,7 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
         department: studentToEdit.department || '',
         class_year: studentToEdit.class_year,
         group_id: studentToEdit.group_id || '',
-        assigned_role: studentToEdit.assigned_role,
+        assigned_role: studentToEdit.assigned_role || 'Full-Stack Developer',
         joining_date: studentToEdit.joining_date,
         status: studentToEdit.status,
         notes: studentToEdit.notes || '',

@@ -173,9 +173,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Organization Brand Header with Close Button */}
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 bg-slate-950/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-xl shadow-md tracking-tighter">
-              CL
-            </div>
+            <img
+              src="/logo.jpeg"
+              alt="Cognilearn Logo"
+              className="w-10 h-10 rounded-xl object-contain bg-white shadow-md border border-slate-700/60 p-0.5"
+            />
             <div className="flex flex-col">
               <span className="font-bold text-sm tracking-wide text-white flex items-center gap-1.5">
                 COGNILEARN

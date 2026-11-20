@@ -6,6 +6,11 @@ import { ClientErrorBoundary } from '@/components/common/ClientErrorBoundary';
 export const metadata: Metadata = {
   title: 'Cognilearn - Student Project Tracking & Management System',
   description: 'Academic project monitoring and management platform for MES College by Cognilearn.',
+  icons: {
+    icon: '/logo.jpeg',
+    shortcut: '/logo.jpeg',
+    apple: '/logo.jpeg'
+  }
 };
 
 export default function RootLayout({

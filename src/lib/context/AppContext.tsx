@@ -104,6 +104,7 @@ interface AppContextType {
 
   // Project Actions
   updateProject: (id: string, updates: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
 
   // Milestone Actions
   addMilestone: (milestone: Omit<ProjectMilestone, 'id' | 'created_at' | 'updated_at'>) => void;
@@ -302,6 +303,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage('cognilearn_payments', payments); }, [payments]);
   useEffect(() => { saveToStorage('cognilearn_staff', staffMembers); }, [staffMembers]);
 
+  // Auto-delete projects that have no students assigned
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setProjects(prevProjects => {
+      if (!Array.isArray(prevProjects)) return prevProjects;
+      const orphanProjects = prevProjects.filter(p => {
+        if (!p) return true;
+        const grp = groups.find(g => g && g.id === p.group_id);
+        if (!grp) return true; // Group does not exist
+        // Check if any active student is assigned to this group
+        const hasStudents = students.some(s => s && (s.group_id === grp.id || grp.member_ids?.includes(s.id)));
+        return !hasStudents; // If no students assigned, it is an orphan project
+      });
+
+      if (orphanProjects.length > 0) {
+        const orphanIds = new Set(orphanProjects.map(p => p.id));
+        setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
+        setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
+        setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
+        return prevProjects.filter(p => !orphanIds.has(p.id));
+      }
+      return prevProjects;
+    });
+  }, [groups, students]);
+
   // Sync relation helper
   const enrichedStudents = useMemo(() => {
     const list = Array.isArray(students) ? students : initialStudents;
@@ -318,13 +344,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).filter(Boolean) as Student[];
   }, [students, colleges, courses, groups]);
 
+  // Dynamic project progress & relation synchronization
+  const enrichedProjects = useMemo(() => {
+    const projs = Array.isArray(projects) ? projects : initialProjects;
+    const ms = Array.isArray(milestones) ? milestones : initialMilestones;
+    const tsks = Array.isArray(tasks) ? tasks : initialTasks;
+    const grps = Array.isArray(groups) ? groups : initialGroups;
+    const mntrs = Array.isArray(mentors) ? mentors : initialMentors;
+    const studs = Array.isArray(students) ? students : initialStudents;
+
+    return projs.map(p => {
+      if (!p) return null;
+      const group = grps.find(g => g && g.id === p.group_id);
+      if (!group) return null;
+
+      // Auto-exclude if no students are assigned to this project's group
+      const assignedStudents = studs.filter(s => s && (s.group_id === p.group_id || group.member_ids?.includes(s.id)));
+      if (assignedStudents.length === 0) return null;
+
+      const mentor = mntrs.find(m => m && (m.id === p.mentor_id || m.id === group?.mentor_id));
+      const pMilestones = ms.filter(m => m && m.project_id === p.id);
+      const pTasks = tsks.filter(t => t && (t.project_id === p.id || (p.group_id && t.group_id === p.group_id)));
+
+      // Dynamically calculate progress unless manual override is explicitly enabled
+      let progress = p.progress_percentage || 0;
+      if (!p.manual_progress_override) {
+        progress = calculateComputedProgress(pMilestones, pTasks);
+      }
+
+      // Automatically sync project status based on progress
+      let status = p.status;
+      if (progress === 100) {
+        status = 'completed';
+      } else if (progress > 0 && status === 'planning') {
+        status = 'in_progress';
+      }
+
+      return {
+        ...p,
+        progress_percentage: progress,
+        status,
+        group,
+        mentor,
+        milestones: pMilestones,
+        tasks: pTasks
+      };
+    }).filter(Boolean) as Project[];
+  }, [projects, milestones, tasks, groups, mentors, students]);
+
   const enrichedGroups = useMemo(() => {
     const grps = Array.isArray(groups) ? groups : initialGroups;
     const clgs = Array.isArray(colleges) ? colleges : initialColleges;
     const crss = Array.isArray(courses) ? courses : initialCourses;
     const mntrs = Array.isArray(mentors) ? mentors : initialMentors;
     const studs = Array.isArray(students) ? students : initialStudents;
-    const projs = Array.isArray(projects) ? projects : initialProjects;
 
     return grps.map(g => {
       if (!g) return null;
@@ -333,40 +406,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const mentor = mntrs.find(m => m && m.id === g.mentor_id);
       const leader = studs.find(s => s && s.id === g.group_leader_id);
       const members = studs.filter(s => s && s.group_id === g.id);
-      const project = projs.find(p => p && p.group_id === g.id);
+      const project = enrichedProjects.find(p => p && p.group_id === g.id);
       return { ...g, college, course, mentor, leader, members, project };
     }).filter(Boolean) as Group[];
-  }, [groups, colleges, courses, mentors, students, projects]);
+  }, [groups, colleges, courses, mentors, students, enrichedProjects]);
 
   const enrichedTasks = useMemo(() => {
     const tsks = Array.isArray(tasks) ? tasks : initialTasks;
     const studs = Array.isArray(students) ? students : initialStudents;
-    const projs = Array.isArray(projects) ? projects : initialProjects;
 
     return tsks.map(t => {
       if (!t) return null;
       const assigned_student = studs.find(s => s && s.id === t.assigned_student_id);
-      const project = projs.find(p => p && p.id === t.project_id);
+      const project = enrichedProjects.find(p => p && p.id === t.project_id);
       return { ...t, assigned_student, project };
     }).filter(Boolean) as Task[];
-  }, [tasks, students, projects]);
+  }, [tasks, students, enrichedProjects]);
 
   const enrichedWeeklyReports = useMemo(() => {
     const rprts = Array.isArray(weeklyReports) ? weeklyReports : initialWeeklyReports;
     const grps = Array.isArray(groups) ? groups : initialGroups;
-    const projs = Array.isArray(projects) ? projects : initialProjects;
     const studs = Array.isArray(students) ? students : initialStudents;
     const mntrs = Array.isArray(mentors) ? mentors : initialMentors;
 
     return rprts.map(w => {
       if (!w) return null;
       const group = grps.find(g => g && g.id === w.group_id);
-      const project = projs.find(p => p && p.id === w.project_id);
+      const project = enrichedProjects.find(p => p && p.id === w.project_id);
       const submitter = studs.find(s => s && s.id === w.submitted_by);
       const mentor = mntrs.find(m => m && m.id === w.mentor_id);
       return { ...w, group, project, submitter, mentor };
     }).filter(Boolean) as WeeklyReport[];
-  }, [weeklyReports, groups, projects, students, mentors]);
+  }, [weeklyReports, groups, enrichedProjects, students, mentors]);
 
   const enrichedAttendance = useMemo(() => {
     const attnd = Array.isArray(attendance) ? attendance : initialAttendance;
@@ -396,7 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const stats: DashboardStats = useMemo(() => {
     const studs = Array.isArray(students) ? students : [];
     const grps = Array.isArray(groups) ? groups : [];
-    const projs = Array.isArray(projects) ? projects : [];
+    const projs = Array.isArray(enrichedProjects) ? enrichedProjects : [];
     const tsks = Array.isArray(tasks) ? tasks : [];
     const attnd = Array.isArray(attendance) ? attendance : [];
     const rprts = Array.isArray(weeklyReports) ? weeklyReports : [];
@@ -412,11 +483,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const totalFeeCollected = pymnts.reduce((acc, p) => acc + ((p && p.paid_amount) || 0), 0);
     const totalFeePending = pymnts.reduce((acc, p) => acc + ((p && p.balance_amount) || 0), 0);
 
-    // Today's attendance calculation (date comparison)
-    const today = new Date().toISOString().split('T')[0];
-    const todaysRecords = attnd.filter(a => a && (a.date === '2024-11-19' || a.date === today));
+    // Today's attendance calculation (local date comparison: YYYY-MM-DD)
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todaysRecords = attnd.filter(a => a && a.date === today);
     const todayPresentCount = todaysRecords.filter(a => a && (a.status === 'present' || a.status === 'late')).length;
-    const todayAbsentCount = todaysRecords.filter(a => a && a.status === 'absent').length;
+    const todayAbsentCount = todaysRecords.filter(a => a && (a.status === 'absent' || a.status === 'leave')).length;
 
     // Overall attendance percentage
     const totalRecords = attnd.length;
@@ -608,11 +680,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateStudent = (id: string, updates: Partial<Student>) => {
+    const existing = students.find(s => s.id === id);
+    const oldGroupId = existing?.group_id;
+    const newGroupId = updates.group_id;
+
     setStudents(prev => prev.map(s => {
       if (s.id !== id) return s;
       const updated = { ...s, ...updates, updated_at: new Date().toISOString() };
       return updated;
     }));
+
+    // If group membership changed
+    if (newGroupId !== undefined && newGroupId !== oldGroupId) {
+      setGroups(prev => prev.map(g => {
+        let memberIds = g.member_ids || [];
+        // Remove from old group
+        if (oldGroupId && g.id === oldGroupId) {
+          memberIds = memberIds.filter(mid => mid !== id);
+          return {
+            ...g,
+            member_ids: memberIds,
+            group_leader_id: g.group_leader_id === id ? memberIds[0] || '' : g.group_leader_id,
+            updated_at: new Date().toISOString()
+          };
+        }
+        // Add to new group
+        if (newGroupId && g.id === newGroupId) {
+          if (!memberIds.includes(id)) {
+            memberIds = [...memberIds, id];
+          }
+          return { ...g, member_ids: memberIds, updated_at: new Date().toISOString() };
+        }
+        return g;
+      }));
+
+      // Check if old group now has 0 students -> auto delete project
+      if (oldGroupId) {
+        const remainingInOld = students.filter(s => s.id !== id && s.group_id === oldGroupId).length;
+        if (remainingInOld === 0) {
+          const orphanProjs = projects.filter(p => p.group_id === oldGroupId);
+          const orphanIds = new Set(orphanProjs.map(p => p.id));
+          if (orphanIds.size > 0) {
+            setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
+            setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
+            setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
+            setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
+            logActivity('PROJECT_AUTO_DELETED', 'project', `Auto-deleted project for group ${oldGroupId} because no students remain assigned`, oldGroupId);
+          }
+        }
+      }
+    }
+
     logActivity('STUDENT_UPDATED', 'student', `Updated student profile information`, id);
   };
 
@@ -620,6 +738,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const target = students.find(s => s.id === id);
     setStudents(prev => prev.filter(s => s.id !== id));
     setPayments(prev => prev.filter(p => p.student_id !== id));
+
+    // Remove student from any groups
+    setGroups(prev => prev.map(g => {
+      const isMember = (g.member_ids || []).includes(id);
+      if (!isMember && g.group_leader_id !== id) return g;
+      const newMemberIds = (g.member_ids || []).filter(mid => mid !== id);
+      return {
+        ...g,
+        member_ids: newMemberIds,
+        group_leader_id: g.group_leader_id === id ? newMemberIds[0] || '' : g.group_leader_id,
+        updated_at: new Date().toISOString()
+      };
+    }));
+
     logActivity('STUDENT_DELETED', 'student', `Removed student ${target?.full_name || id}`, id);
   };
 
@@ -627,22 +759,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const createGroup = (data: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
     const now = new Date().toISOString();
     const newGroupId = `g-${Date.now()}`;
+
+    // Disallow students who already exist in any other group
+    const existingGroupStudentIds = new Set<string>();
+    groups.forEach(g => {
+      (g.member_ids || []).forEach(mid => existingGroupStudentIds.add(mid));
+    });
+    students.forEach(s => {
+      if (s.group_id) existingGroupStudentIds.add(s.id);
+    });
+
+    // Only allow students that do not already belong to any other group
+    const validMemberIds = (data.member_ids || []).filter(sid => !existingGroupStudentIds.has(sid));
+
     const newGroup: Group = {
       ...data,
       id: newGroupId,
+      member_ids: validMemberIds,
+      group_leader_id: validMemberIds.includes(data.group_leader_id || '') ? data.group_leader_id : validMemberIds[0] || '',
       created_at: now,
       updated_at: now
     };
     setGroups(prev => [newGroup, ...prev]);
 
     // Automatically link selected students to this group
-    if (data.member_ids && data.member_ids.length > 0) {
+    if (validMemberIds.length > 0) {
       setStudents(prev => prev.map(s => {
-        if (data.member_ids?.includes(s.id)) {
+        if (validMemberIds.includes(s.id)) {
           return {
             ...s,
             group_id: newGroupId,
-            assigned_role: s.id === data.group_leader_id ? 'Team Leader' : s.assigned_role,
+            assigned_role: s.id === newGroup.group_leader_id ? 'Team Leader' : s.assigned_role,
             updated_at: now
           };
         }
@@ -651,85 +798,147 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // Update payment records with this group_id
       setPayments(prev => prev.map(p => {
-        if (data.member_ids?.includes(p.student_id)) {
+        if (validMemberIds.includes(p.student_id)) {
           return { ...p, group_id: newGroupId, updated_at: now };
         }
         return p;
       }));
+
+      // Automatically initialize project for this group ONLY IF students are assigned
+      const newProjectId = `p-${Date.now()}`;
+      const newProject: Project = {
+        id: newProjectId,
+        group_id: newGroupId,
+        project_code: `PRJ-${data.group_code}`,
+        title: data.project_title || `${data.name} Project`,
+        topic: 'Full-Stack Software Development',
+        description: `Academic capstone project assigned to ${data.name}.`,
+        technologies: ['Next.js', 'PostgreSQL', 'Tailwind CSS'],
+        category: 'Full-Stack Software System',
+        start_date: data.start_date,
+        expected_completion_date: data.expected_completion_date,
+        status: 'planning',
+        manual_progress_override: false,
+        progress_percentage: 0,
+        created_at: now,
+        updated_at: now
+      };
+      setProjects(prev => [newProject, ...prev]);
+
+      // Automatically create the 13 standard developmental stages for this project
+      const defaultSteps = [
+        'Requirement Analysis',
+        'Problem Identification',
+        'Research and Documentation',
+        'System Architecture',
+        'UI/UX Design',
+        'Database Design',
+        'Backend Development',
+        'Frontend Development',
+        'Integration',
+        'Testing',
+        'Bug Fixing',
+        'Final Documentation',
+        'Final Presentation'
+      ];
+      const initialGroupMilestones: ProjectMilestone[] = defaultSteps.map((stepName, idx) => ({
+        id: `ms-${newProjectId}-${idx + 1}`,
+        project_id: newProjectId,
+        step_order: idx + 1,
+        name: stepName,
+        description: `Academic milestone phase ${idx + 1} for ${newProject.title}.`,
+        assigned_student_id: newGroup.group_leader_id,
+        start_date: data.start_date,
+        due_date: data.expected_completion_date,
+        status: 'pending',
+        is_custom: false,
+        created_at: now,
+        updated_at: now
+      }));
+      setMilestones(prev => [...prev, ...initialGroupMilestones]);
     }
 
-    // Automatically initialize project for this group
-    const newProjectId = `p-${Date.now()}`;
-    const newProject: Project = {
-      id: newProjectId,
-      group_id: newGroupId,
-      project_code: `PRJ-${data.group_code}`,
-      title: data.project_title || `${data.name} Project`,
-      topic: 'Full-Stack Software Development',
-      description: `Academic capstone project assigned to ${data.name}.`,
-      technologies: ['Next.js', 'PostgreSQL', 'Tailwind CSS'],
-      category: 'Full-Stack Software System',
-      start_date: data.start_date,
-      expected_completion_date: data.expected_completion_date,
-      status: 'planning',
-      manual_progress_override: false,
-      progress_percentage: 0,
-      created_at: now,
-      updated_at: now
-    };
-    setProjects(prev => [newProject, ...prev]);
-
-    // Automatically create the 13 standard developmental stages for this project
-    const defaultSteps = [
-      'Requirement Analysis',
-      'Problem Identification',
-      'Research and Documentation',
-      'System Architecture',
-      'UI/UX Design',
-      'Database Design',
-      'Backend Development',
-      'Frontend Development',
-      'Integration',
-      'Testing',
-      'Bug Fixing',
-      'Final Documentation',
-      'Final Presentation'
-    ];
-    const initialGroupMilestones: ProjectMilestone[] = defaultSteps.map((stepName, idx) => ({
-      id: `ms-${newProjectId}-${idx + 1}`,
-      project_id: newProjectId,
-      step_order: idx + 1,
-      name: stepName,
-      description: `Academic milestone phase ${idx + 1} for ${newProject.title}.`,
-      assigned_student_id: data.group_leader_id,
-      start_date: data.start_date,
-      due_date: data.expected_completion_date,
-      status: 'pending',
-      is_custom: false,
-      created_at: now,
-      updated_at: now
-    }));
-    setMilestones(prev => [...prev, ...initialGroupMilestones]);
-
-    logActivity('GROUP_CREATED', 'group', `Formed cohort ${data.name} (${data.group_code}) with ${data.member_ids?.length || 0} students and initialized 13 milestone stages`, newGroupId);
+    logActivity('GROUP_CREATED', 'group', `Formed cohort ${data.name} (${data.group_code}) with ${validMemberIds.length} students`, newGroupId);
   };
 
   const updateGroup = (id: string, updates: Partial<Group>) => {
-    setGroups(prev => prev.map(g => g.id === id ? { ...g, ...updates, updated_at: new Date().toISOString() } : g));
-    if (updates.member_ids && updates.member_ids.length > 0) {
+    const now = new Date().toISOString();
+
+    // Prevent adding students who already belong to another group
+    let sanitizedMemberIds = updates.member_ids;
+    if (sanitizedMemberIds !== undefined) {
+      const otherGroupStudentIds = new Set<string>();
+      groups.forEach(g => {
+        if (g.id !== id) {
+          (g.member_ids || []).forEach(mid => otherGroupStudentIds.add(mid));
+        }
+      });
+      students.forEach(s => {
+        if (s.group_id && s.group_id !== id) {
+          otherGroupStudentIds.add(s.id);
+        }
+      });
+      sanitizedMemberIds = sanitizedMemberIds.filter(sid => !otherGroupStudentIds.has(sid));
+    }
+
+    const finalUpdates: Partial<Group> = {
+      ...updates,
+      ...(sanitizedMemberIds !== undefined ? { member_ids: sanitizedMemberIds } : {})
+    };
+
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, ...finalUpdates, updated_at: now } : g));
+
+    if (sanitizedMemberIds !== undefined) {
+      // Sync student group assignments: unassign removed students, assign newly included
       setStudents(prev => prev.map(s => {
-        if (updates.member_ids?.includes(s.id)) {
-          return { ...s, group_id: id, updated_at: new Date().toISOString() };
+        if (sanitizedMemberIds!.includes(s.id)) {
+          return { ...s, group_id: id, updated_at: now };
+        } else if (s.group_id === id) {
+          return { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? 'Member' : s.assigned_role, updated_at: now };
         }
         return s;
       }));
+
+      // AUTO DELETE PROJECT if no students remain in the group
+      if (sanitizedMemberIds.length === 0) {
+        const orphanProjects = projects.filter(p => p.group_id === id);
+        const orphanIds = new Set(orphanProjects.map(p => p.id));
+        if (orphanIds.size > 0) {
+          setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
+          setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
+          setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
+          setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
+          logActivity('PROJECT_AUTO_DELETED', 'project', `Auto-deleted project for group ${id} because all students were unassigned`, id);
+        }
+      }
     }
+
     logActivity('GROUP_UPDATED', 'group', `Updated details for group`, id);
   };
 
   const deleteGroup = (id: string) => {
+    const target = groups.find(g => g.id === id);
     setGroups(prev => prev.filter(g => g.id !== id));
-    logActivity('GROUP_DELETED', 'group', `Disbanded project group`, id);
+
+    // Auto-delete the project for this group
+    const relatedProjects = projects.filter(p => p.group_id === id);
+    const relatedProjectIds = new Set(relatedProjects.map(p => p.id));
+    if (relatedProjectIds.size > 0) {
+      setProjects(prev => prev.filter(p => !relatedProjectIds.has(p.id)));
+      setMilestones(prev => prev.filter(m => !relatedProjectIds.has(m.project_id)));
+      setTasks(prev => prev.filter(t => !relatedProjectIds.has(t.project_id)));
+      setEvaluations(prev => prev.filter(e => !relatedProjectIds.has(e.project_id)));
+    }
+
+    // Unassign students from this deleted group
+    setStudents(prev => prev.map(s => {
+      if (s.group_id === id) {
+        return { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? 'Member' : s.assigned_role, updated_at: new Date().toISOString() };
+      }
+      return s;
+    }));
+
+    logActivity('GROUP_DELETED', 'group', `Disbanded project group ${target?.name || id} and auto-deleted associated project`, id);
   };
 
   // Payment Actions
@@ -852,6 +1061,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return updated;
     }));
     logActivity('PROJECT_UPDATED', 'project', `Modified project details and status`, id);
+  };
+
+  const deleteProject = (id: string) => {
+    const target = projects.find(p => p.id === id);
+    setProjects(prev => prev.filter(p => p.id !== id));
+    setMilestones(prev => prev.filter(m => m.project_id !== id));
+    setTasks(prev => prev.filter(t => t.project_id !== id));
+    setEvaluations(prev => prev.filter(e => e.project_id !== id));
+    logActivity('PROJECT_DELETED', 'project', `Deleted project portfolio ${target?.title || id}`, id);
   };
 
   // Milestone Actions
@@ -1050,7 +1268,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         mentors,
         students: enrichedStudents,
         groups: enrichedGroups,
-        projects,
+        projects: enrichedProjects,
         milestones,
         tasks: enrichedTasks,
         weeklyReports: enrichedWeeklyReports,
@@ -1078,6 +1296,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateStaffMember,
         deleteStaffMember,
         updateProject,
+        deleteProject,
         addMilestone,
         updateMilestone,
         deleteMilestone,

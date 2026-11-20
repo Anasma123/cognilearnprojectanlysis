@@ -26,9 +26,10 @@ import {
 } from 'lucide-react';
 
 export default function AttendancePage() {
-  const { attendance, students, groups, updateAttendance, currentUser } = useApp();
+  const { attendance, students, groups, colleges, updateAttendance, currentUser } = useApp();
 
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedCollege, setSelectedCollege] = useState('ALL');
   const [selectedGroup, setSelectedGroup] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [sessionFilter, setSessionFilter] = useState<'ALL' | AttendanceSession>('ALL');
@@ -42,12 +43,13 @@ export default function AttendancePage() {
   const filteredRecords = useMemo(() => {
     return attendance.filter(r => {
       const matchDate = !selectedDate || r.date === selectedDate;
+      const matchCollege = selectedCollege === 'ALL' || r.student?.college_id === selectedCollege || groups.find(g => g.id === r.group_id)?.college_id === selectedCollege;
       const matchGroup = selectedGroup === 'ALL' || r.group_id === selectedGroup;
       const matchStatus = selectedStatus === 'ALL' || r.status === selectedStatus;
       const matchSession = sessionFilter === 'ALL' || r.session_type === sessionFilter;
-      return matchDate && matchGroup && matchStatus && matchSession;
+      return matchDate && matchCollege && matchGroup && matchStatus && matchSession;
     });
-  }, [attendance, selectedDate, selectedGroup, selectedStatus, sessionFilter]);
+  }, [attendance, selectedDate, selectedCollege, selectedGroup, selectedStatus, sessionFilter, groups]);
 
   // Overall statistics
   const presentCount = filteredRecords.filter(r => r.status === 'present').length;
@@ -59,14 +61,15 @@ export default function AttendancePage() {
 
   // Identify students with overall attendance < 75%
   const lowAttendanceStudents = useMemo(() => {
-    return students.filter(s => {
+    const list = selectedCollege === 'ALL' ? students : students.filter(s => s && s.college_id === selectedCollege);
+    return list.filter(s => {
       const sRecords = attendance.filter(a => a.student_id === s.id);
       if (sRecords.length === 0) return false;
       const sPresent = sRecords.filter(a => a.status === 'present' || a.status === 'late').length;
       const pct = (sPresent / sRecords.length) * 100;
       return pct < 75;
     });
-  }, [students, attendance]);
+  }, [students, attendance, selectedCollege]);
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +173,7 @@ export default function AttendancePage() {
 
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
               Filter by Date
@@ -185,6 +188,22 @@ export default function AttendancePage() {
 
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
+              Filter by College
+            </label>
+            <select
+              value={selectedCollege}
+              onChange={(e) => setSelectedCollege(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700"
+            >
+              <option value="ALL">All Colleges</option>
+              {(colleges || []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
               Filter by Group
             </label>
             <select
@@ -193,9 +212,11 @@ export default function AttendancePage() {
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700"
             >
               <option value="ALL">All Project Groups</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>
-              ))}
+              {groups
+                .filter(g => selectedCollege === 'ALL' || g.college_id === selectedCollege)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>
+                ))}
             </select>
           </div>
 

@@ -105,10 +105,12 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
             <span className="hidden sm:inline text-xs font-semibold text-slate-700">Menu</span>
           </button>
 
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-900 text-white font-black text-base flex items-center justify-center shadow-xs">
-              CL
-            </div>
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <img
+              src="/logo.jpeg"
+              alt="Cognilearn Logo"
+              className="w-9 h-9 rounded-xl object-contain bg-white shadow-xs border border-slate-100 p-0.5"
+            />
             <div className="flex flex-col">
               <span className="font-black text-sm tracking-tight text-slate-900 leading-none">
                 COGNILEARN

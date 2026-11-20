@@ -29,7 +29,7 @@ export function StatCards() {
     {
       title: 'Total Students',
       value: stats.totalStudents,
-      subtitle: 'MES College Enrolled',
+      subtitle: '',
       icon: GraduationCap,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -127,9 +127,11 @@ export function StatCards() {
                 {card.value}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">
-              {card.subtitle}
-            </p>
+            {card.subtitle ? (
+              <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                {card.subtitle}
+              </p>
+            ) : null}
           </div>
         );
       })}

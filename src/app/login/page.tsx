@@ -50,8 +50,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-8 space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-900 text-white font-black text-2xl flex items-center justify-center mx-auto shadow-md">
-            CL
+          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 p-1 flex items-center justify-center mx-auto shadow-md">
+            <img
+              src="/logo.jpeg"
+              alt="Cognilearn Logo"
+              className="w-full h-full object-contain rounded-xl"
+            />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
             COGNILEARN

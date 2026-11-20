@@ -80,7 +80,7 @@ export interface Student {
   department: string;
   class_year: string;
   group_id?: string;
-  assigned_role: string;
+  assigned_role?: string;
   joining_date: string;
   status: StudentStatus;
   notes?: string;
