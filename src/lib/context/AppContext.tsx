@@ -133,6 +133,9 @@ interface AppContextType {
   // Notification Actions
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+
+  // Password Actions
+  changePassword: (oldPass: string, newPass: string, usernameOrRole?: string) => { success: boolean; message: string };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -164,11 +167,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const [passwords, setPasswords] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return { admin: '123', staff: '123' };
+    try {
+      const item = localStorage.getItem('cognilearn_passwords');
+      return item ? JSON.parse(item) : { admin: '123', staff: '123' };
+    } catch {
+      return { admin: '123', staff: '123' };
+    }
+  });
+
   const login = (username: string, pass: string): boolean => {
     const cleanUser = username.trim().toLowerCase();
+    const adminPass = passwords['admin'] || '123';
+    const staffPass = passwords['staff'] || '123';
 
-    // 1. Admin login: admin / 123
-    if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && pass === '123') {
+    // 1. Admin login
+    if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && pass === adminPass) {
       setIsAuthenticated(true);
       setCurrentUser(initialProfiles[0]);
       if (typeof window !== 'undefined') {
@@ -177,8 +192,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return true;
     }
 
-    // 2. Staff login: staff / 123
-    if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && pass === '123') {
+    // 2. Staff login
+    if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && pass === staffPass) {
       setIsAuthenticated(true);
       const staffUser: UserProfile = initialProfiles[1] || {
         id: '00000000-0000-0000-0000-000000000002',
@@ -201,7 +216,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const matchedStaff = staffMembers.find(
       s => (s.email.toLowerCase() === cleanUser || s.full_name.toLowerCase() === cleanUser) && s.is_active
     );
-    if (matchedStaff && pass === '123') {
+    const userPass = passwords[cleanUser] || (matchedStaff?.role === 'staff' ? staffPass : adminPass);
+    if (matchedStaff && pass === userPass) {
       setIsAuthenticated(true);
       const dynamicUser: UserProfile = {
         id: matchedStaff.id,
@@ -929,6 +945,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
+  // Password Management
+  const changePassword = (
+    oldPass: string,
+    newPass: string,
+    usernameOrRole?: string
+  ): { success: boolean; message: string } => {
+    const target = (usernameOrRole || currentUser.role || 'admin').trim().toLowerCase();
+    const currentStoredPass = passwords[target] || (target === 'staff' ? passwords['staff'] : passwords['admin']) || '123';
+
+    if (oldPass !== currentStoredPass) {
+      return { success: false, message: 'Current password does not match!' };
+    }
+
+    if (!newPass || newPass.trim().length < 3) {
+      return { success: false, message: 'New password must be at least 3 characters long.' };
+    }
+
+    const updated = {
+      ...passwords,
+      [target]: newPass.trim()
+    };
+    if (target === 'admin' || target === 'admin@cognilearn.org') {
+      updated['admin'] = newPass.trim();
+    }
+    if (target === 'staff' || target === 'staff@cognilearn.org') {
+      updated['staff'] = newPass.trim();
+    }
+
+    setPasswords(updated);
+    saveToStorage('cognilearn_passwords', updated);
+
+    logActivity('SECURITY_UPDATE', 'auth', `Updated password for account: ${target}`);
+
+    return { success: true, message: 'Password updated successfully!' };
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -984,7 +1036,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteDocument,
         saveEvaluation,
         markNotificationRead,
-        markAllNotificationsRead
+        markAllNotificationsRead,
+        changePassword
       }}
     >
       {children}

@@ -24,9 +24,11 @@ import {
   LineChart,
   FileBarChart,
   FileText,
-  Settings
+  Settings,
+  KeyRound
 } from 'lucide-react';
 import { useApp } from '@/lib/context/AppContext';
+import { ChangePasswordModal } from '../common/ChangePasswordModal';
 
 interface TopNavProps {
   onToggleSidebar: () => void;
@@ -40,6 +42,7 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
 
   const roleMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
@@ -284,6 +287,15 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
             )}
           </div>
 
+          {/* Change Password Button */}
+          <button
+            onClick={() => setShowChangePassModal(true)}
+            title="Change Account Password"
+            className="p-2 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 transition-colors border border-slate-200/80 cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4" />
+          </button>
+
           {/* Quick Sign Out Button */}
           <button
             onClick={() => {
@@ -297,6 +309,13 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
           </button>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={showChangePassModal}
+        onClose={() => setShowChangePassModal(false)}
+        defaultUsername={currentUser.role}
+      />
     </header>
   );
 }

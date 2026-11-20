@@ -12,11 +12,14 @@ import {
   Trash2,
   Server,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  KeyRound
 } from 'lucide-react';
+import { ChangePasswordModal } from '@/components/common/ChangePasswordModal';
 
 export default function SettingsPage() {
   const { currentUser, stats, colleges, courses, addCollege, deleteCollege, addCourse, deleteCourse } = useApp();
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
 
   const [newCollegeName, setNewCollegeName] = useState('');
   const [newCollegeCode, setNewCollegeCode] = useState('');
@@ -250,6 +253,35 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Account Security & Password Card */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
+            <KeyRound className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Account Security & Credentials</h3>
+            <p className="text-xs text-slate-500">
+              Update login password for {currentUser.full_name} ({currentUser.role.toUpperCase()})
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowChangePassModal(true)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          Change Password
+        </button>
+      </div>
+
+      <ChangePasswordModal
+        isOpen={showChangePassModal}
+        onClose={() => setShowChangePassModal(false)}
+        defaultUsername={currentUser.role}
+      />
     </div>
   );
 }
