@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/lib/context/AppContext';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
@@ -13,7 +14,8 @@ import {
   Server,
   CheckCircle2,
   AlertCircle,
-  KeyRound
+  KeyRound,
+  FileBarChart
 } from 'lucide-react';
 import { ChangePasswordModal } from '@/components/common/ChangePasswordModal';
 
@@ -114,13 +116,22 @@ export default function SettingsPage() {
                       {col.code}
                     </span>
                   </div>
-                  <button
-                    onClick={() => deleteCollege(col.id)}
-                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
-                    title="Delete College"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href="/reports"
+                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                      title="View Institutional Report & Print PDF"
+                    >
+                      <FileBarChart className="w-3.5 h-3.5" />
+                    </Link>
+                    <button
+                      onClick={() => deleteCollege(col.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                      title="Delete College"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}

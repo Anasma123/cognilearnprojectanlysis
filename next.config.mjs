@@ -20,6 +20,7 @@ const nextConfig = {
             try {
               const serverDir = path.resolve(process.cwd(), '.next/server');
               const chunksDir = path.resolve(serverDir, 'chunks');
+              const pagesDir = path.resolve(serverDir, 'pages');
               if (fs.existsSync(chunksDir)) {
                 const files = fs.readdirSync(chunksDir);
                 for (const file of files) {
@@ -29,6 +30,11 @@ const nextConfig = {
                     try {
                       fs.copyFileSync(src, dest);
                     } catch {}
+                    if (fs.existsSync(pagesDir)) {
+                      try {
+                        fs.copyFileSync(src, path.join(pagesDir, file));
+                      } catch {}
+                    }
                   }
                 }
               }

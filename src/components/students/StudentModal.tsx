@@ -17,10 +17,10 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
 
   // Helper to compute next unique sequential student ID: 1, 2, 3...
   const computeNextStudentId = () => {
-    const nums = students
-      .map(s => parseInt(s.student_reg_no, 10))
+    const nums = (students || [])
+      .map(s => s && s.student_reg_no ? parseInt(String(s.student_reg_no), 10) : NaN)
       .filter(n => !isNaN(n) && n > 0);
-    return nums.length > 0 ? String(Math.max(...nums) + 1) : String(students.length + 1);
+    return nums.length > 0 ? String(Math.max(...nums) + 1) : String((students?.length || 0) + 1);
   };
 
   const [formData, setFormData] = useState({

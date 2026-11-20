@@ -5,8 +5,8 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation } from '../types';
-import { formatDateIndian } from './formatters';
+import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment } from '../types';
+import { formatDateIndian, formatCurrencyIndian } from './formatters';
 
 const PRIMARY_COLOR: [number, number, number] = [15, 23, 42]; // Navy #0f172a
 const ACCENT_COLOR: [number, number, number] = [30, 64, 175]; // Blue #1e40af
@@ -287,4 +287,179 @@ export function generateFinalProjectReportPdf(project: Project, group?: Group, e
 
   addReportFooter(doc);
   doc.save(`Project_${project.project_code}_Report.pdf`);
+}
+
+/**
+ * Generate Comprehensive Institutional College Report PDF
+ */
+export function generateCollegeReportPdf({
+  college,
+  departments = [],
+  students = [],
+  groups = [],
+  projects = [],
+  payments = [],
+  attendance = []
+}: {
+  college: College;
+  departments?: Course[];
+  students?: Student[];
+  groups?: Group[];
+  projects?: Project[];
+  payments?: StudentPayment[];
+  attendance?: AttendanceRecord[];
+}) {
+  const doc = new jsPDF();
+  const collegeName = college?.name || 'MES College';
+  const collegeCode = college?.code || 'MES-INST';
+
+  // 1. Header
+  addCognilearnHeader(
+    doc,
+    `INSTITUTIONAL REPORT: ${collegeName.toUpperCase()}`,
+    `College Code: ${collegeCode} | Comprehensive Academic, Cohort & Financial Audit`
+  );
+
+  // Compute metrics
+  const totalStudents = students.length;
+  const totalGroups = groups.length;
+  const totalProjects = projects.length;
+  const completedProjects = projects.filter(p => p && p.status === 'completed').length;
+  const ongoingProjects = projects.filter(p => p && p.status === 'in_progress').length;
+
+  const avgProgress = projects.length > 0
+    ? Math.round(projects.reduce((acc, p) => acc + ((p && p.progress_percentage) || 0), 0) / projects.length)
+    : 0;
+
+  const totalFeeCollected = payments.reduce((acc, p) => acc + ((p && p.paid_amount) || 0), 0);
+  const totalFeePending = payments.reduce((acc, p) => acc + ((p && p.balance_amount) || 0), 0);
+
+  const totalAttendanceRecords = attendance.length;
+  const presentRecords = attendance.filter(a => a && (a.status === 'present' || a.status === 'late')).length;
+  const attendanceRate = totalAttendanceRecords > 0
+    ? Math.round((presentRecords / totalAttendanceRecords) * 100)
+    : 100;
+
+  // 2. Executive Summary KPI Table
+  const kpiRows = [
+    ['Total Enrolled Students', `${totalStudents} Students`, 'Total Project Groups', `${totalGroups} Groups`],
+    ['Projects Active / Done', `${ongoingProjects} Ongoing / ${completedProjects} Completed`, 'Average Project Progress', `${avgProgress}%`],
+    ['Total Fee Collected', `INR ${totalFeeCollected.toLocaleString('en-IN')}`, 'Pending Fee Balance', `INR ${totalFeePending.toLocaleString('en-IN')}`],
+    ['Overall Attendance Rate', `${attendanceRate}%`, 'Affiliated Departments', `${departments.length} Courses/Depts`],
+  ];
+
+  autoTable(doc, {
+    startY: 50,
+    head: [['Executive Parameter', 'Value', 'Executive Parameter', 'Value']],
+    body: kpiRows,
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 8.5, cellPadding: 3.5 },
+  });
+
+  // 3. Project Groups Roster
+  let currentY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Project Groups & Dissertation Overview:', 14, currentY);
+
+  const groupRows = groups.map((g, idx) => {
+    const proj = projects.find(p => p && p.group_id === g.id) || g.project;
+    return [
+      idx + 1,
+      g.group_code,
+      g.name,
+      proj?.title || g.project_title || 'Dissertation in Progress',
+      g.leader?.full_name || 'Assigned Member',
+      g.mentor?.full_name || 'Assigned Faculty',
+      `${proj?.progress_percentage || 0}%`,
+      (g.status || 'Active').toUpperCase()
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Code', 'Group Name', 'Project Title', 'Leader', 'Mentor', 'Progress', 'Status']],
+    body: groupRows.length > 0 ? groupRows : [['-', '-', 'No project groups registered under this college', '-', '-', '-', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+  });
+
+  // 4. Student Enrolled Roster & Financial Ledger
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 230) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Enrolled Students & Fee Ledger Audit:', 14, currentY);
+
+  const studentRows = students.map((s, idx) => {
+    const pay = payments.find(p => p && p.student_id === s.id);
+    const grp = groups.find(g => g && g.id === s.group_id);
+    const paidAmt = pay ? pay.paid_amount : 0;
+    const dueAmt = pay ? pay.balance_amount : (s.total_fee || 5000);
+    return [
+      idx + 1,
+      s.student_reg_no,
+      s.full_name,
+      s.course?.name || s.department || 'N/A',
+      grp?.group_code || 'Unassigned',
+      s.assigned_role,
+      `INR ${paidAmt.toLocaleString('en-IN')}`,
+      dueAmt === 0 ? 'PAID' : `INR ${dueAmt.toLocaleString('en-IN')}`,
+      (s.status || 'active').toUpperCase()
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Reg No', 'Student Name', 'Dept/Course', 'Group', 'Role', 'Paid', 'Due', 'Status']],
+    body: studentRows.length > 0 ? studentRows : [['-', '-', 'No students enrolled under this college', '-', '-', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7, cellPadding: 2.2 },
+    didParseCell: (data) => {
+      if (data.column.index === 7) {
+        if (data.cell.raw === 'PAID') {
+          data.cell.styles.textColor = [16, 185, 129];
+        } else if (String(data.cell.raw).startsWith('INR') && data.cell.raw !== 'INR 0') {
+          data.cell.styles.textColor = [225, 29, 72];
+        }
+      }
+    }
+  });
+
+  // 5. Signature Block
+  let lastY = (doc as any).lastAutoTable.finalY + 12;
+  if (lastY > 250) {
+    doc.addPage();
+    lastY = 25;
+  }
+
+  const sigY = lastY + 20;
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  doc.line(14, sigY, 70, sigY);
+  doc.line(135, sigY, 196, sigY);
+
+  doc.setFontSize(8);
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Institutional Head / College Principal', 14, sigY + 5);
+  doc.text('Cognilearn Academic Controller', 135, sigY + 5);
+
+  doc.setFontSize(7);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Seal & Verified Signature', 14, sigY + 9);
+  doc.text('MES Project Verification Cell', 135, sigY + 9);
+
+  addReportFooter(doc);
+  doc.save(`College_${collegeName.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`);
 }

@@ -75,16 +75,20 @@ export function calculateComputedProgress(
 /**
  * Styling helper for Task & Project Statuses
  */
-export function getStatusBadgeClass(status: string): string {
-  switch (status.toLowerCase()) {
+export function getStatusBadgeClass(status?: string): string {
+  if (!status) return 'bg-slate-100 text-slate-700 border-slate-200';
+  switch (String(status).toLowerCase()) {
     case 'completed':
     case 'approved':
     case 'present':
+    case 'active':
+    case 'paid':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'in_progress':
     case 'under_review':
     case 'submitted':
     case 'late':
+    case 'partial':
       return 'bg-blue-50 text-blue-700 border-blue-200';
     case 'planning':
     case 'todo':
@@ -94,11 +98,14 @@ export function getStatusBadgeClass(status: string): string {
     case 'blocked':
     case 'revision_required':
     case 'leave':
+    case 'on_leave':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'overdue':
     case 'absent':
     case 'delayed':
     case 'critical':
+    case 'dropped':
+    case 'unpaid':
       return 'bg-rose-50 text-rose-700 border-rose-200';
     default:
       return 'bg-slate-100 text-slate-700 border-slate-200';
@@ -108,9 +115,9 @@ export function getStatusBadgeClass(status: string): string {
 /**
  * Clean status string for human presentation
  */
-export function humanizeStatus(status: string): string {
+export function humanizeStatus(status?: string): string {
   if (!status) return '';
-  return status
+  return String(status)
     .replace(/_/g, ' ')
     .replace(/\b\w/g, char => char.toUpperCase());
 }

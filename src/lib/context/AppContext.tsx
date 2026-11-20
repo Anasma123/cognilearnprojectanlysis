@@ -252,7 +252,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return fallback;
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : fallback;
+      if (!item) return fallback;
+      const parsed = JSON.parse(item);
+      if (parsed === null || parsed === undefined) return fallback;
+      if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
+      return parsed as T;
     } catch {
       return fallback;
     }
@@ -300,85 +304,137 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Sync relation helper
   const enrichedStudents = useMemo(() => {
-    return students.map(s => {
-      const college = colleges.find(c => c.id === s.college_id);
-      const course = courses.find(c => c.id === s.course_id);
-      const group = groups.find(g => g.id === s.group_id);
+    const list = Array.isArray(students) ? students : initialStudents;
+    const clgs = Array.isArray(colleges) ? colleges : initialColleges;
+    const crss = Array.isArray(courses) ? courses : initialCourses;
+    const grps = Array.isArray(groups) ? groups : initialGroups;
+
+    return list.map(s => {
+      if (!s) return null;
+      const college = clgs.find(c => c && c.id === s.college_id);
+      const course = crss.find(c => c && c.id === s.course_id);
+      const group = grps.find(g => g && g.id === s.group_id);
       return { ...s, college, course, group };
-    });
+    }).filter(Boolean) as Student[];
   }, [students, colleges, courses, groups]);
 
   const enrichedGroups = useMemo(() => {
-    return groups.map(g => {
-      const college = colleges.find(c => c.id === g.college_id);
-      const course = courses.find(c => c.id === g.course_id);
-      const mentor = mentors.find(m => m.id === g.mentor_id);
-      const leader = students.find(s => s.id === g.group_leader_id);
-      const members = students.filter(s => s.group_id === g.id);
-      const project = projects.find(p => p.group_id === g.id);
+    const grps = Array.isArray(groups) ? groups : initialGroups;
+    const clgs = Array.isArray(colleges) ? colleges : initialColleges;
+    const crss = Array.isArray(courses) ? courses : initialCourses;
+    const mntrs = Array.isArray(mentors) ? mentors : initialMentors;
+    const studs = Array.isArray(students) ? students : initialStudents;
+    const projs = Array.isArray(projects) ? projects : initialProjects;
+
+    return grps.map(g => {
+      if (!g) return null;
+      const college = clgs.find(c => c && c.id === g.college_id);
+      const course = crss.find(c => c && c.id === g.course_id);
+      const mentor = mntrs.find(m => m && m.id === g.mentor_id);
+      const leader = studs.find(s => s && s.id === g.group_leader_id);
+      const members = studs.filter(s => s && s.group_id === g.id);
+      const project = projs.find(p => p && p.group_id === g.id);
       return { ...g, college, course, mentor, leader, members, project };
-    });
+    }).filter(Boolean) as Group[];
   }, [groups, colleges, courses, mentors, students, projects]);
 
   const enrichedTasks = useMemo(() => {
-    return tasks.map(t => {
-      const assigned_student = students.find(s => s.id === t.assigned_student_id);
-      const project = projects.find(p => p.id === t.project_id);
+    const tsks = Array.isArray(tasks) ? tasks : initialTasks;
+    const studs = Array.isArray(students) ? students : initialStudents;
+    const projs = Array.isArray(projects) ? projects : initialProjects;
+
+    return tsks.map(t => {
+      if (!t) return null;
+      const assigned_student = studs.find(s => s && s.id === t.assigned_student_id);
+      const project = projs.find(p => p && p.id === t.project_id);
       return { ...t, assigned_student, project };
-    });
+    }).filter(Boolean) as Task[];
   }, [tasks, students, projects]);
 
   const enrichedWeeklyReports = useMemo(() => {
-    return weeklyReports.map(w => {
-      const group = groups.find(g => g.id === w.group_id);
-      const project = projects.find(p => p.id === w.project_id);
-      const submitter = students.find(s => s.id === w.submitted_by);
-      const mentor = mentors.find(m => m.id === w.mentor_id);
+    const rprts = Array.isArray(weeklyReports) ? weeklyReports : initialWeeklyReports;
+    const grps = Array.isArray(groups) ? groups : initialGroups;
+    const projs = Array.isArray(projects) ? projects : initialProjects;
+    const studs = Array.isArray(students) ? students : initialStudents;
+    const mntrs = Array.isArray(mentors) ? mentors : initialMentors;
+
+    return rprts.map(w => {
+      if (!w) return null;
+      const group = grps.find(g => g && g.id === w.group_id);
+      const project = projs.find(p => p && p.id === w.project_id);
+      const submitter = studs.find(s => s && s.id === w.submitted_by);
+      const mentor = mntrs.find(m => m && m.id === w.mentor_id);
       return { ...w, group, project, submitter, mentor };
-    });
+    }).filter(Boolean) as WeeklyReport[];
   }, [weeklyReports, groups, projects, students, mentors]);
 
   const enrichedAttendance = useMemo(() => {
-    return attendance.map(a => {
-      const student = students.find(s => s.id === a.student_id);
+    const attnd = Array.isArray(attendance) ? attendance : initialAttendance;
+    const studs = Array.isArray(students) ? students : initialStudents;
+
+    return attnd.map(a => {
+      if (!a) return null;
+      const student = studs.find(s => s && s.id === a.student_id);
       return { ...a, student };
-    });
+    }).filter(Boolean) as AttendanceRecord[];
   }, [attendance, students]);
 
   const enrichedPayments = useMemo(() => {
-    return payments.map(p => {
-      const student = students.find(s => s.id === p.student_id);
-      const group = groups.find(g => g.id === p.group_id || g.id === student?.group_id);
+    const pymnts = Array.isArray(payments) ? payments : initialPayments;
+    const studs = Array.isArray(students) ? students : initialStudents;
+    const grps = Array.isArray(groups) ? groups : initialGroups;
+
+    return pymnts.map(p => {
+      if (!p) return null;
+      const student = studs.find(s => s && s.id === p.student_id);
+      const group = grps.find(g => g && (g.id === p.group_id || g.id === student?.group_id));
       return { ...p, student, group };
-    });
+    }).filter(Boolean) as StudentPayment[];
   }, [payments, students, groups]);
 
   // Compute live dashboard stats
   const stats: DashboardStats = useMemo(() => {
-    const totalStudents = students.length;
-    const totalGroups = groups.length;
-    const totalActiveProjects = projects.filter(p => p.status !== 'completed').length;
-    const completedProjects = projects.filter(p => p.status === 'completed').length;
-    const ongoingProjects = projects.filter(p => p.status === 'in_progress').length;
-    const delayedProjects = projects.filter(p => p.status === 'on_hold').length;
+    const studs = Array.isArray(students) ? students : [];
+    const grps = Array.isArray(groups) ? groups : [];
+    const projs = Array.isArray(projects) ? projects : [];
+    const tsks = Array.isArray(tasks) ? tasks : [];
+    const attnd = Array.isArray(attendance) ? attendance : [];
+    const rprts = Array.isArray(weeklyReports) ? weeklyReports : [];
+    const pymnts = Array.isArray(payments) ? payments : [];
 
-    const totalFeeCollected = payments.reduce((acc, p) => acc + (p.paid_amount || 0), 0);
-    const totalFeePending = payments.reduce((acc, p) => acc + (p.balance_amount || 0), 0);
+    const totalStudents = studs.length;
+    const totalGroups = grps.length;
+    const totalActiveProjects = projs.filter(p => p && p.status !== 'completed').length;
+    const completedProjects = projs.filter(p => p && p.status === 'completed').length;
+    const ongoingProjects = projs.filter(p => p && p.status === 'in_progress').length;
+    const delayedProjects = projs.filter(p => p && p.status === 'on_hold').length;
+
+    const totalFeeCollected = pymnts.reduce((acc, p) => acc + ((p && p.paid_amount) || 0), 0);
+    const totalFeePending = pymnts.reduce((acc, p) => acc + ((p && p.balance_amount) || 0), 0);
 
     // Today's attendance calculation (date comparison)
     const today = new Date().toISOString().split('T')[0];
-    const todaysRecords = attendance.filter(a => a.date === '2024-11-19' || a.date === today);
-    const todayPresentCount = todaysRecords.filter(a => a.status === 'present' || a.status === 'late').length;
-    const todayAbsentCount = todaysRecords.filter(a => a.status === 'absent').length;
+    const todaysRecords = attnd.filter(a => a && (a.date === '2024-11-19' || a.date === today));
+    const todayPresentCount = todaysRecords.filter(a => a && (a.status === 'present' || a.status === 'late')).length;
+    const todayAbsentCount = todaysRecords.filter(a => a && a.status === 'absent').length;
 
     // Overall attendance percentage
-    const totalRecords = attendance.length;
-    const presentRecords = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+    const totalRecords = attnd.length;
+    const presentRecords = attnd.filter(a => a && (a.status === 'present' || a.status === 'late')).length;
     const overallAttendancePercentage = totalRecords > 0 ? Math.round((presentRecords / totalRecords) * 100) : 0;
 
-    const pendingTasks = tasks.filter(t => t.status !== 'completed').length;
-    const overdueTasks = tasks.filter(t => t.status === 'overdue' || (t.status !== 'completed' && new Date(t.due_date) < new Date())).length;
-    const weeklyUpdatesPendingReview = weeklyReports.filter(w => w.review_status === 'submitted' || w.review_status === 'under_review').length;
+    const pendingTasks = tsks.filter(t => t && t.status !== 'completed').length;
+    const overdueTasks = tsks.filter(t => {
+      if (!t) return false;
+      if (t.status === 'overdue') return true;
+      if (t.status !== 'completed' && t.due_date) {
+        const d = new Date(t.due_date);
+        return !isNaN(d.getTime()) && d < new Date();
+      }
+      return false;
+    }).length;
+
+    const weeklyUpdatesPendingReview = rprts.filter(w => w && (w.review_status === 'submitted' || w.review_status === 'under_review')).length;
 
     return {
       totalStudents,
@@ -508,10 +564,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Compute sequential unique student ID: 1, 2, 3...
     const computeNextRegNo = () => {
-      const nums = students
-        .map(s => parseInt(s.student_reg_no, 10))
+      const nums = (students || [])
+        .map(s => s && s.student_reg_no ? parseInt(String(s.student_reg_no), 10) : NaN)
         .filter(n => !isNaN(n) && n > 0);
-      return nums.length > 0 ? String(Math.max(...nums) + 1) : String(students.length + 1);
+      return nums.length > 0 ? String(Math.max(...nums) + 1) : String((students?.length || 0) + 1);
     };
 
     const finalRegNo = (data.student_reg_no && data.student_reg_no.trim() !== '')

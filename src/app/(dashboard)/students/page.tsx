@@ -43,12 +43,21 @@ export default function StudentsPage() {
 
   // Filtered Students List
   const filteredStudents = useMemo(() => {
+    if (!students || !Array.isArray(students)) return [];
     return students.filter((s) => {
+      if (!s) return false;
+      const fullName = (s.full_name || '').toLowerCase();
+      const regNo = String(s.student_reg_no || '').toLowerCase();
+      const email = (s.email || '').toLowerCase();
+      const role = (s.assigned_role || '').toLowerCase();
+      const query = (searchTerm || '').trim().toLowerCase();
+
       const matchSearch =
-        s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.student_reg_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.assigned_role.toLowerCase().includes(searchTerm.toLowerCase());
+        !query ||
+        fullName.includes(query) ||
+        regNo.includes(query) ||
+        email.includes(query) ||
+        role.includes(query);
 
       const matchCollege = selectedCollege === 'ALL' || s.college_id === selectedCollege;
       const matchCourse = selectedCourse === 'ALL' || s.course_id === selectedCourse;
@@ -93,7 +102,7 @@ export default function StudentsPage() {
             Export Excel
           </button>
 
-          {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'staff' || currentUser?.role === 'mentor') && (
             <button
               onClick={() => { setStudentToEdit(null); setShowAddModal(true); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -128,7 +137,7 @@ export default function StudentsPage() {
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none"
             >
               <option value="ALL">All Colleges</option>
-              {colleges.map((c) => (
+              {(colleges || []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -142,7 +151,7 @@ export default function StudentsPage() {
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none"
             >
               <option value="ALL">All Project Groups</option>
-              {groups.map((g) => (
+              {(groups || []).map((g) => (
                 <option key={g.id} value={g.id}>{g.group_code}</option>
               ))}
             </select>
@@ -229,7 +238,7 @@ export default function StudentsPage() {
                           {student.assigned_role}
                         </span>
                         {(() => {
-                          const pay = payments.find(p => p.student_id === student.id);
+                          const pay = (payments || []).find(p => p.student_id === student.id);
                           return (
                             <span className={`inline-block w-fit text-[10px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
                               pay?.status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
@@ -269,7 +278,7 @@ export default function StudentsPage() {
                         >
                           <FileDown className="w-4 h-4" />
                         </button>
-                        {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'staff') && (
                           <>
                             <button
                               onClick={() => { setStudentToEdit(student); setShowAddModal(true); }}

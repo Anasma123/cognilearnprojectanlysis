@@ -150,7 +150,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     }
   ];
 
-  const filteredNav = navItems.filter(item => item.roles.includes(currentUser.role));
+  const currentRole = currentUser?.role || 'admin';
+  const filteredNav = navItems.filter(item => item.roles.includes(currentRole));
 
   return (
     <>

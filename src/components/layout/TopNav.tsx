@@ -87,8 +87,8 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
     { title: 'Settings & Supabase', href: '/settings', icon: Settings, adminOnly: true }
   ];
 
-  const filteredPrimary = primaryNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin' || currentUser.role === 'staff');
-  const filteredMore = moreNavItems.filter(item => !item.adminOnly || currentUser.role === 'admin' || currentUser.role === 'staff');
+  const filteredPrimary = primaryNavItems.filter(item => !item.adminOnly || currentUser?.role === 'admin' || currentUser?.role === 'staff');
+  const filteredMore = moreNavItems.filter(item => !item.adminOnly || currentUser?.role === 'admin' || currentUser?.role === 'staff');
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">

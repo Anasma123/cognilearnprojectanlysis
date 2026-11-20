@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AppProvider } from '@/lib/context/AppContext';
+import { ClientErrorBoundary } from '@/components/common/ClientErrorBoundary';
 
 export const metadata: Metadata = {
   title: 'Cognilearn - Student Project Tracking & Management System',
@@ -15,9 +16,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
-        <AppProvider>
-          {children}
-        </AppProvider>
+        <ClientErrorBoundary fallbackTitle="Cognilearn System Notice">
+          <AppProvider>
+            {children}
+          </AppProvider>
+        </ClientErrorBoundary>
       </body>
     </html>
   );

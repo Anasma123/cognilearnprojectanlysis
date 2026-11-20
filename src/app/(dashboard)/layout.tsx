@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useApp } from '@/lib/context/AppContext';
+import { ClientErrorBoundary } from '@/components/common/ClientErrorBoundary';
 
 export default function DashboardLayout({
   children,
@@ -41,17 +42,21 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Slide-out Sidebar Drawer (opens when hamburger is clicked) */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <ClientErrorBoundary fallbackTitle="Dashboard Module Recovered">
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        {/* Slide-out Sidebar Drawer (opens when hamburger is clicked) */}
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main Full-Width Application Container (No permanent fixed sidebar) */}
-      <div className="flex-1 flex flex-col min-h-screen w-full">
-        <TopNav onToggleSidebar={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {children}
-        </main>
+        {/* Main Full-Width Application Container */}
+        <div className="flex-1 flex flex-col min-h-screen w-full">
+          <TopNav onToggleSidebar={() => setSidebarOpen(true)} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+            <ClientErrorBoundary>
+              {children}
+            </ClientErrorBoundary>
+          </main>
+        </div>
       </div>
-    </div>
+    </ClientErrorBoundary>
   );
 }
