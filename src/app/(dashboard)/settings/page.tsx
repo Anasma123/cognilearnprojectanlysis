@@ -280,7 +280,6 @@ export default function SettingsPage() {
       <ChangePasswordModal
         isOpen={showChangePassModal}
         onClose={() => setShowChangePassModal(false)}
-        defaultUsername={currentUser.role}
       />
     </div>
   );

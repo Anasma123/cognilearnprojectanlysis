@@ -314,7 +314,6 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
       <ChangePasswordModal
         isOpen={showChangePassModal}
         onClose={() => setShowChangePassModal(false)}
-        defaultUsername={currentUser.role}
       />
     </header>
   );

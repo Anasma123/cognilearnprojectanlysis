@@ -2,19 +2,17 @@
 
 import React, { useState } from 'react';
 import { useApp } from '@/lib/context/AppContext';
-import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldCheck, User } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultUsername?: string;
 }
 
-export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: ChangePasswordModalProps) {
+export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
   const { currentUser, changePassword } = useApp();
 
-  const [username, setUsername] = useState(defaultUsername || currentUser.email || currentUser.role || 'admin');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -49,7 +47,8 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
 
     setLoading(true);
 
-    const result = changePassword(currentPassword, newPassword, username);
+    const targetAccount = currentUser.role || currentUser.email || 'admin';
+    const result = changePassword(currentPassword, newPassword, targetAccount);
 
     setLoading(false);
 
@@ -73,26 +72,36 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
       onClose={() => {
         setError('');
         setSuccess('');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
         onClose();
       }}
       title="Change Account Password"
-      subtitle="Update login credentials for your Cognilearn portal account"
+      subtitle="Update the login password for your currently logged-in account"
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-        {/* Username field */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
-            Account Username / Role
-          </label>
-          <input
-            type="text"
-            required
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="admin or staff"
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-          />
+        {/* Logged in Account Banner (Fixed, Read-Only) */}
+        <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-800 text-white font-black text-sm flex items-center justify-center uppercase shadow-xs">
+              {currentUser.role.slice(0, 2)}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                {currentUser.full_name}
+                <span className="text-[10px] text-slate-400 font-normal">(Logged In)</span>
+              </p>
+              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                {currentUser.email || currentUser.role}
+              </p>
+            </div>
+          </div>
+
+          <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+            {currentUser.role}
+          </span>
         </div>
 
         {/* Current Password */}
@@ -106,8 +115,8 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password (default is 123)"
-              className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+              placeholder="Enter current password (default: 123)"
+              className="w-full pl-3 pr-10 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
             />
             <button
               type="button"
@@ -131,7 +140,7 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter new password"
-              className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+              className="w-full pl-3 pr-10 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
             />
             <button
               type="button"
@@ -155,7 +164,7 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Re-enter new password"
-              className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+              className="w-full pl-3 pr-10 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
             />
             <button
               type="button"
@@ -169,14 +178,14 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
 
         {/* Status Alerts */}
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 font-medium">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{success}</span>
           </div>
@@ -187,14 +196,14 @@ export function ChangePasswordModal({ isOpen, onClose, defaultUsername }: Change
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+            className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
           >
             <KeyRound className="w-3.5 h-3.5" />
             <span>{loading ? 'Updating...' : 'Update Password'}</span>
