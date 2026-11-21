@@ -43,6 +43,13 @@ import {
   initialPayments,
   initialStaff
 } from '../data/initialData';
+import {
+  fetchCloudData,
+  seedCloudDataIfEmpty,
+  cloudUpsert,
+  cloudDelete,
+  cloudInsertMany
+} from '../supabase/syncService';
 import { calculateComputedProgress } from '../utils/formatters';
 
 interface AppContextType {
@@ -302,6 +309,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage('cognilearn_attendance', attendance); }, [attendance]);
   useEffect(() => { saveToStorage('cognilearn_payments', payments); }, [payments]);
   useEffect(() => { saveToStorage('cognilearn_staff', staffMembers); }, [staffMembers]);
+
+  // Cloud Database Live Synchronization (Supabase)
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initCloudSync() {
+      try {
+        const cloud = await fetchCloudData();
+        if (!cloud || !isMounted) return;
+
+        const hasCloudRecords = (
+          cloud.students.length > 0 ||
+          cloud.groups.length > 0 ||
+          cloud.colleges.length > 0 ||
+          cloud.projects.length > 0
+        );
+
+        if (hasCloudRecords) {
+          // Cloud has existing data -> synchronize to state
+          if (cloud.colleges.length > 0) setColleges(cloud.colleges);
+          if (cloud.courses.length > 0) setCourses(cloud.courses);
+          if (cloud.students.length > 0) setStudents(cloud.students);
+          if (cloud.groups.length > 0) setGroups(cloud.groups);
+          if (cloud.projects.length > 0) setProjects(cloud.projects);
+          if (cloud.milestones.length > 0) setMilestones(cloud.milestones);
+          if (cloud.tasks.length > 0) setTasks(cloud.tasks);
+          if (cloud.weeklyReports.length > 0) setWeeklyReports(cloud.weeklyReports);
+          if (cloud.attendance.length > 0) setAttendance(cloud.attendance);
+          if (cloud.payments.length > 0) setPayments(cloud.payments);
+          if (cloud.staffMembers.length > 0) setStaffMembers(cloud.staffMembers);
+        } else {
+          // Cloud is empty -> Seed existing local data to cloud so other users can see it immediately
+          await seedCloudDataIfEmpty({
+            colleges,
+            courses,
+            students,
+            groups,
+            projects,
+            milestones,
+            tasks,
+            weeklyReports,
+            attendance,
+            payments,
+            staffMembers
+          });
+        }
+      } catch (err) {
+        console.warn('Cloud sync initialization notice:', err);
+      }
+    }
+
+    initCloudSync();
+
+    // 10-second polling to ensure multiple devices stay synchronized
+    const pollInterval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const cloud = await fetchCloudData();
+      if (!cloud || !isMounted) return;
+      if (cloud.students.length > 0 || cloud.groups.length > 0) {
+        setColleges(cloud.colleges);
+        setCourses(cloud.courses);
+        setStudents(cloud.students);
+        setGroups(cloud.groups);
+        setProjects(cloud.projects);
+        setMilestones(cloud.milestones);
+        setTasks(cloud.tasks);
+        setWeeklyReports(cloud.weeklyReports);
+        setAttendance(cloud.attendance);
+        setPayments(cloud.payments);
+      }
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, []);
 
   // Auto-delete projects that have no students assigned
   useEffect(() => {
@@ -592,12 +676,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString()
     };
     setColleges(prev => [...prev, newCol]);
+    cloudUpsert('colleges', newCol);
     logActivity('COLLEGE_ADDED', 'college', `Added college: ${trimmed}`, newCol.id);
     return newCol;
   };
 
   const deleteCollege = (id: string) => {
     setColleges(prev => prev.filter(c => c.id !== id));
+    cloudDelete('colleges', id);
     logActivity('COLLEGE_DELETED', 'college', `Removed college`, id);
   };
 
@@ -616,12 +702,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString()
     };
     setCourses(prev => [...prev, newCourse]);
+    cloudUpsert('courses', newCourse, ['college']);
     logActivity('COURSE_ADDED', 'course', `Added department/course: ${trimmed}`, newCourse.id);
     return newCourse;
   };
 
   const deleteCourse = (id: string) => {
     setCourses(prev => prev.filter(c => c.id !== id));
+    cloudDelete('courses', id);
     logActivity('COURSE_DELETED', 'course', `Removed department/course`, id);
   };
 
@@ -657,6 +745,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setStudents(prev => [newStudent, ...prev]);
+    cloudUpsert('students', newStudent, ['college', 'course', 'group']);
 
     // Automatically create payment record for fee management
     const newPayment: StudentPayment = {
@@ -675,6 +764,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setPayments(prev => [newPayment, ...prev]);
+    cloudUpsert('student_payments', newPayment, ['student', 'group']);
 
     logActivity('STUDENT_ENROLLED', 'student', `Enrolled student ${data.full_name} (ID: ${finalRegNo})`, newStudentId);
   };
@@ -687,6 +777,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStudents(prev => prev.map(s => {
       if (s.id !== id) return s;
       const updated = { ...s, ...updates, updated_at: new Date().toISOString() };
+      cloudUpsert('students', updated, ['college', 'course', 'group']);
       return updated;
     }));
 
@@ -697,19 +788,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Remove from old group
         if (oldGroupId && g.id === oldGroupId) {
           memberIds = memberIds.filter(mid => mid !== id);
-          return {
+          const updatedG = {
             ...g,
             member_ids: memberIds,
             group_leader_id: g.group_leader_id === id ? memberIds[0] || '' : g.group_leader_id,
             updated_at: new Date().toISOString()
           };
+          cloudUpsert('groups', updatedG, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+          return updatedG;
         }
         // Add to new group
         if (newGroupId && g.id === newGroupId) {
           if (!memberIds.includes(id)) {
             memberIds = [...memberIds, id];
           }
-          return { ...g, member_ids: memberIds, updated_at: new Date().toISOString() };
+          const updatedG = { ...g, member_ids: memberIds, updated_at: new Date().toISOString() };
+          cloudUpsert('groups', updatedG, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+          return updatedG;
         }
         return g;
       }));
@@ -722,6 +817,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const orphanIds = new Set(orphanProjs.map(p => p.id));
           if (orphanIds.size > 0) {
             setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
+            orphanIds.forEach(pId => cloudDelete('projects', pId));
             setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
             setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
             setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
@@ -738,18 +834,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const target = students.find(s => s.id === id);
     setStudents(prev => prev.filter(s => s.id !== id));
     setPayments(prev => prev.filter(p => p.student_id !== id));
+    cloudDelete('students', id);
+    cloudDelete('student_payments', id);
 
     // Remove student from any groups
     setGroups(prev => prev.map(g => {
       const isMember = (g.member_ids || []).includes(id);
       if (!isMember && g.group_leader_id !== id) return g;
       const newMemberIds = (g.member_ids || []).filter(mid => mid !== id);
-      return {
+      const updatedG = {
         ...g,
         member_ids: newMemberIds,
         group_leader_id: g.group_leader_id === id ? newMemberIds[0] || '' : g.group_leader_id,
         updated_at: new Date().toISOString()
       };
+      cloudUpsert('groups', updatedG, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+      return updatedG;
     }));
 
     logActivity('STUDENT_DELETED', 'student', `Removed student ${target?.full_name || id}`, id);
@@ -781,17 +881,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setGroups(prev => [newGroup, ...prev]);
+    cloudUpsert('groups', newGroup, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
 
     // Automatically link selected students to this group
     if (validMemberIds.length > 0) {
       setStudents(prev => prev.map(s => {
         if (validMemberIds.includes(s.id)) {
-          return {
+          const updatedStudent = {
             ...s,
             group_id: newGroupId,
-            assigned_role: s.id === newGroup.group_leader_id ? 'Team Leader' : s.assigned_role,
+            assigned_role: s.id === newGroup.group_leader_id ? ('Team Leader' as const) : s.assigned_role,
             updated_at: now
           };
+          cloudUpsert('students', updatedStudent, ['college', 'course', 'group']);
+          return updatedStudent;
         }
         return s;
       }));
@@ -799,7 +902,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Update payment records with this group_id
       setPayments(prev => prev.map(p => {
         if (validMemberIds.includes(p.student_id)) {
-          return { ...p, group_id: newGroupId, updated_at: now };
+          const updatedPay = { ...p, group_id: newGroupId, updated_at: now };
+          cloudUpsert('student_payments', updatedPay, ['student', 'group']);
+          return updatedPay;
         }
         return p;
       }));
@@ -824,6 +929,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updated_at: now
       };
       setProjects(prev => [newProject, ...prev]);
+      cloudUpsert('projects', newProject, ['group', 'mentor', 'milestones', 'tasks']);
 
       // Automatically create the 13 standard developmental stages for this project
       const defaultSteps = [
@@ -850,12 +956,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         assigned_student_id: newGroup.group_leader_id,
         start_date: data.start_date,
         due_date: data.expected_completion_date,
-        status: 'pending',
+        status: 'pending' as const,
         is_custom: false,
         created_at: now,
         updated_at: now
       }));
       setMilestones(prev => [...prev, ...initialGroupMilestones]);
+      cloudInsertMany('project_milestones', initialGroupMilestones, ['assigned_student']);
     }
 
     logActivity('GROUP_CREATED', 'group', `Formed cohort ${data.name} (${data.group_code}) with ${validMemberIds.length} students`, newGroupId);
@@ -886,15 +993,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...(sanitizedMemberIds !== undefined ? { member_ids: sanitizedMemberIds } : {})
     };
 
-    setGroups(prev => prev.map(g => g.id === id ? { ...g, ...finalUpdates, updated_at: now } : g));
+    setGroups(prev => prev.map(g => {
+      if (g.id !== id) return g;
+      const updated = { ...g, ...finalUpdates, updated_at: now };
+      cloudUpsert('groups', updated, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+      return updated;
+    }));
 
     if (sanitizedMemberIds !== undefined) {
       // Sync student group assignments: unassign removed students, assign newly included
       setStudents(prev => prev.map(s => {
         if (sanitizedMemberIds!.includes(s.id)) {
-          return { ...s, group_id: id, updated_at: now };
+          const updated = { ...s, group_id: id, updated_at: now };
+          cloudUpsert('students', updated, ['college', 'course', 'group']);
+          return updated;
         } else if (s.group_id === id) {
-          return { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? 'Member' : s.assigned_role, updated_at: now };
+          const updated = { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? ('Member' as const) : s.assigned_role, updated_at: now };
+          cloudUpsert('students', updated, ['college', 'course', 'group']);
+          return updated;
         }
         return s;
       }));
@@ -905,6 +1021,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const orphanIds = new Set(orphanProjects.map(p => p.id));
         if (orphanIds.size > 0) {
           setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
+          orphanIds.forEach(pId => cloudDelete('projects', pId));
           setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
           setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
           setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
@@ -919,12 +1036,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteGroup = (id: string) => {
     const target = groups.find(g => g.id === id);
     setGroups(prev => prev.filter(g => g.id !== id));
+    cloudDelete('groups', id);
 
     // Auto-delete the project for this group
     const relatedProjects = projects.filter(p => p.group_id === id);
     const relatedProjectIds = new Set(relatedProjects.map(p => p.id));
     if (relatedProjectIds.size > 0) {
       setProjects(prev => prev.filter(p => !relatedProjectIds.has(p.id)));
+      relatedProjectIds.forEach(pId => cloudDelete('projects', pId));
       setMilestones(prev => prev.filter(m => !relatedProjectIds.has(m.project_id)));
       setTasks(prev => prev.filter(t => !relatedProjectIds.has(t.project_id)));
       setEvaluations(prev => prev.filter(e => !relatedProjectIds.has(e.project_id)));
@@ -933,7 +1052,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Unassign students from this deleted group
     setStudents(prev => prev.map(s => {
       if (s.group_id === id) {
-        return { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? 'Member' : s.assigned_role, updated_at: new Date().toISOString() };
+        const updated = { ...s, group_id: undefined, assigned_role: s.assigned_role === 'Team Leader' ? ('Member' as const) : s.assigned_role, updated_at: new Date().toISOString() };
+        cloudUpsert('students', updated, ['college', 'course', 'group']);
+        return updated;
       }
       return s;
     }));
@@ -954,6 +1075,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const receiptNo = data.receipt_no || `REC-${Date.now().toString().slice(-6)}`;
 
+    let paymentToSync: StudentPayment | null = null;
     setPayments(prev => {
       const existing = prev.find(p => p.student_id === data.student_id);
       if (existing) {
@@ -972,18 +1094,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           created_at: now
         };
 
-        return prev.map(p => p.id === existing.id ? {
-          ...p,
+        const updated = {
+          ...existing,
           paid_amount: newPaid,
           balance_amount: newBalance,
           status: newStatus,
           last_payment_date: now.split('T')[0],
           payment_mode: data.payment_mode,
           receipt_no: receiptNo,
-          remarks: data.remarks || p.remarks,
-          transactions: [...(p.transactions || []), transaction],
+          remarks: data.remarks || existing.remarks,
+          transactions: [...(existing.transactions || []), transaction],
           updated_at: now
-        } : p);
+        };
+        paymentToSync = updated;
+        return prev.map(p => p.id === existing.id ? updated : p);
       } else {
         const balance = Math.max(0, data.total_fee - data.amount);
         const status: PaymentStatus = balance === 0 ? 'paid' : data.amount > 0 ? 'partial' : 'unpaid';
@@ -1002,9 +1126,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           created_at: now,
           updated_at: now
         };
+        paymentToSync = newRecord;
         return [newRecord, ...prev];
       }
     });
+
+    if (paymentToSync) {
+      cloudUpsert('student_payments', paymentToSync, ['student', 'group']);
+    }
 
     setStudents(prev => prev.map(s => {
       if (s.id === data.student_id) {
@@ -1012,7 +1141,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const updatedPaid = currentPaid + data.amount;
         const fee = s.total_fee || data.total_fee;
         const status: PaymentStatus = (fee - updatedPaid <= 0) ? 'paid' : 'partial';
-        return { ...s, paid_amount: updatedPaid, payment_status: status };
+        const updated = { ...s, paid_amount: updatedPaid, payment_status: status, updated_at: now };
+        cloudUpsert('students', updated, ['college', 'course', 'group']);
+        return updated;
       }
       return s;
     }));
@@ -1021,7 +1152,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updatePayment = (id: string, updates: Partial<StudentPayment>) => {
-    setPayments(prev => prev.map(p => p.id === id ? { ...p, ...updates, updated_at: new Date().toISOString() } : p));
+    setPayments(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const updated = { ...p, ...updates, updated_at: new Date().toISOString() };
+      cloudUpsert('student_payments', updated, ['student', 'group']);
+      return updated;
+    }));
     logActivity('PAYMENT_UPDATED', 'payment', `Updated fee ledger record`, id);
   };
 
@@ -1035,16 +1171,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setStaffMembers(prev => [newStaff, ...prev]);
+    cloudUpsert('profiles', {
+      id: newStaff.id,
+      email: newStaff.email,
+      full_name: newStaff.full_name,
+      role: newStaff.role,
+      phone: newStaff.phone,
+      avatar_url: newStaff.avatar_url,
+      is_active: newStaff.is_active,
+      created_at: now,
+      updated_at: now
+    });
     logActivity('STAFF_ADDED', 'staff', `Added ${data.role.toUpperCase()} staff member ${data.full_name}`, newStaff.id);
   };
 
   const updateStaffMember = (id: string, updates: Partial<StaffMember>) => {
-    setStaffMembers(prev => prev.map(s => s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s));
+    setStaffMembers(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const updated = { ...s, ...updates, updated_at: new Date().toISOString() };
+      cloudUpsert('profiles', updated);
+      return updated;
+    }));
     logActivity('STAFF_UPDATED', 'staff', `Updated staff permissions/profile`, id);
   };
 
   const deleteStaffMember = (id: string) => {
     setStaffMembers(prev => prev.filter(s => s.id !== id));
+    cloudDelete('profiles', id);
     logActivity('STAFF_REMOVED', 'staff', `Removed staff member`, id);
   };
 
@@ -1058,6 +1211,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const pTasks = tasks.filter(t => t.project_id === id);
         updated.progress_percentage = calculateComputedProgress(pMilestones, pTasks);
       }
+      cloudUpsert('projects', updated, ['group', 'mentor', 'milestones', 'tasks']);
       return updated;
     }));
     logActivity('PROJECT_UPDATED', 'project', `Modified project details and status`, id);
@@ -1066,6 +1220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteProject = (id: string) => {
     const target = projects.find(p => p.id === id);
     setProjects(prev => prev.filter(p => p.id !== id));
+    cloudDelete('projects', id);
     setMilestones(prev => prev.filter(m => m.project_id !== id));
     setTasks(prev => prev.filter(t => t.project_id !== id));
     setEvaluations(prev => prev.filter(e => e.project_id !== id));
@@ -1082,16 +1237,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setMilestones(prev => [...prev, newMilestone]);
+    cloudUpsert('project_milestones', newMilestone, ['assigned_student']);
     logActivity('MILESTONE_ADDED', 'milestone', `Added milestone: ${data.name}`, newMilestone.id);
   };
 
   const updateMilestone = (id: string, updates: Partial<ProjectMilestone>) => {
-    setMilestones(prev => prev.map(m => m.id === id ? { ...m, ...updates, updated_at: new Date().toISOString() } : m));
+    setMilestones(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      const updated = { ...m, ...updates, updated_at: new Date().toISOString() };
+      cloudUpsert('project_milestones', updated, ['assigned_student']);
+      return updated;
+    }));
     logActivity('MILESTONE_UPDATED', 'milestone', `Updated milestone status`, id);
   };
 
   const deleteMilestone = (id: string) => {
     setMilestones(prev => prev.filter(m => m.id !== id));
+    cloudDelete('project_milestones', id);
   };
 
   // Task Actions
@@ -1104,16 +1266,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setTasks(prev => [newTask, ...prev]);
+    cloudUpsert('tasks', newTask, ['assigned_student', 'project']);
     logActivity('TASK_CREATED', 'task', `Assigned task: ${data.title}`, newTask.id);
   };
 
   const updateTask = (id: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t));
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const updated = { ...t, ...updates, updated_at: new Date().toISOString() };
+      cloudUpsert('tasks', updated, ['assigned_student', 'project']);
+      return updated;
+    }));
     logActivity('TASK_UPDATED', 'task', `Updated task state`, id);
   };
 
   const deleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+    cloudDelete('tasks', id);
     logActivity('TASK_DELETED', 'task', `Removed task item`, id);
   };
 
@@ -1127,6 +1296,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: now
     };
     setWeeklyReports(prev => [newReport, ...prev]);
+    cloudUpsert('weekly_reports', newReport, ['group', 'project', 'submitter', 'mentor']);
     logActivity('WEEKLY_REPORT_SUBMITTED', 'weekly_report', `Submitted Week ${data.week_number} progress report`, newReport.id);
 
     // Notify Admins & Mentors
@@ -1147,7 +1317,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     setWeeklyReports(prev => prev.map(w => {
       if (w.id !== id) return w;
-      return {
+      const updated = {
         ...w,
         mentor_feedback: feedback,
         review_status: status,
@@ -1155,6 +1325,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         mentor_id: currentUser.id,
         updated_at: now
       };
+      cloudUpsert('weekly_reports', updated, ['group', 'project', 'submitter', 'mentor']);
+      return updated;
     }));
     logActivity('WEEKLY_REPORT_REVIEWED', 'weekly_report', `Reviewed weekly report: Marked as ${status}`, id);
   };
@@ -1174,12 +1346,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const filtered = prev.filter(p => !records.some(r => r.student_id === p.student_id && r.date === p.date && r.session_type === p.session_type));
       return [...newRecords, ...filtered];
     });
+    cloudInsertMany('attendance', newRecords, ['student']);
 
     logActivity('ATTENDANCE_MARKED', 'attendance', `Marked attendance for ${records.length} students on ${records[0]?.date || 'today'}`);
   };
 
   const updateAttendance = (id: string, status: AttendanceRecord['status'], remarks?: string) => {
-    setAttendance(prev => prev.map(a => a.id === id ? { ...a, status, remarks: remarks || a.remarks, updated_at: new Date().toISOString() } : a));
+    setAttendance(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const updated = { ...a, status, remarks: remarks || a.remarks, updated_at: new Date().toISOString() };
+      cloudUpsert('attendance', updated, ['student']);
+      return updated;
+    }));
     logActivity('ATTENDANCE_EDITED', 'attendance', `Modified attendance record`, id);
   };
 
