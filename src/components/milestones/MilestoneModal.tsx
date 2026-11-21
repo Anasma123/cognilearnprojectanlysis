@@ -28,6 +28,8 @@ export function MilestoneModal({ isOpen, onClose, milestoneToEdit }: MilestoneMo
   });
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (milestoneToEdit) {
       setFormData({
         name: milestoneToEdit.name,
@@ -55,7 +57,7 @@ export function MilestoneModal({ isOpen, onClose, milestoneToEdit }: MilestoneMo
         is_custom: true
       });
     }
-  }, [milestoneToEdit, isOpen, projects, students, milestones]);
+  }, [milestoneToEdit, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

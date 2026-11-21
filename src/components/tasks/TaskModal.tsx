@@ -28,6 +28,8 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
   });
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (taskToEdit) {
       setFormData({
         title: taskToEdit.title,
@@ -55,7 +57,7 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
         completion_notes: ''
       });
     }
-  }, [taskToEdit, isOpen, projects, groups, students]);
+  }, [taskToEdit, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

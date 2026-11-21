@@ -50,6 +50,8 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
   const [customCourseName, setCustomCourseName] = useState('');
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (studentToEdit) {
       setFormData({
         student_reg_no: studentToEdit.student_reg_no,
@@ -101,7 +103,7 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
       setCustomCollegeName('');
       setCustomCourseName('');
     }
-  }, [studentToEdit, isOpen, colleges, courses, groups, students]);
+  }, [studentToEdit, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

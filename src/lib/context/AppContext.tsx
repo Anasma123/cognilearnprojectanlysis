@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   UserProfile,
   Student,
@@ -310,6 +310,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage('cognilearn_payments', payments); }, [payments]);
   useEffect(() => { saveToStorage('cognilearn_staff', staffMembers); }, [staffMembers]);
 
+  // Track user's latest local edit to prevent polling from wiping active data
+  const lastLocalEditTime = useRef<number>(0);
+
   // Cloud Database Live Synchronization (Supabase)
   useEffect(() => {
     let isMounted = true;
@@ -362,24 +365,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     initCloudSync();
 
-    // 10-second polling to ensure multiple devices stay synchronized
+    // 15-second background polling without overwriting active user typing
     const pollInterval = setInterval(async () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (Date.now() - lastLocalEditTime.current < 8000) return; // Skip if user actively made edits in last 8s
+
       const cloud = await fetchCloudData();
       if (!cloud || !isMounted) return;
-      if (cloud.students.length > 0 || cloud.groups.length > 0) {
-        setColleges(cloud.colleges);
-        setCourses(cloud.courses);
-        setStudents(cloud.students);
-        setGroups(cloud.groups);
-        setProjects(cloud.projects);
-        setMilestones(cloud.milestones);
-        setTasks(cloud.tasks);
-        setWeeklyReports(cloud.weeklyReports);
-        setAttendance(cloud.attendance);
-        setPayments(cloud.payments);
+
+      if (cloud.students.length > 0 || cloud.groups.length > 0 || cloud.colleges.length > 0) {
+        setColleges(prev => JSON.stringify(prev) !== JSON.stringify(cloud.colleges) ? cloud.colleges : prev);
+        setCourses(prev => JSON.stringify(prev) !== JSON.stringify(cloud.courses) ? cloud.courses : prev);
+        setStudents(prev => JSON.stringify(prev) !== JSON.stringify(cloud.students) ? cloud.students : prev);
+        setGroups(prev => JSON.stringify(prev) !== JSON.stringify(cloud.groups) ? cloud.groups : prev);
+        setProjects(prev => JSON.stringify(prev) !== JSON.stringify(cloud.projects) ? cloud.projects : prev);
+        setMilestones(prev => JSON.stringify(prev) !== JSON.stringify(cloud.milestones) ? cloud.milestones : prev);
+        setTasks(prev => JSON.stringify(prev) !== JSON.stringify(cloud.tasks) ? cloud.tasks : prev);
+        setWeeklyReports(prev => JSON.stringify(prev) !== JSON.stringify(cloud.weeklyReports) ? cloud.weeklyReports : prev);
+        setAttendance(prev => JSON.stringify(prev) !== JSON.stringify(cloud.attendance) ? cloud.attendance : prev);
+        setPayments(prev => JSON.stringify(prev) !== JSON.stringify(cloud.payments) ? cloud.payments : prev);
+        setStaffMembers(prev => JSON.stringify(prev) !== JSON.stringify(cloud.staffMembers) ? cloud.staffMembers : prev);
       }
-    }, 10000);
+    }, 15000);
 
     return () => {
       isMounted = false;
@@ -715,6 +722,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Student Actions
   const addStudent = (data: Omit<Student, 'id' | 'created_at' | 'updated_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newStudentId = `s-${Date.now()}`;
     const totalFee = data.total_fee || 5000;
@@ -857,6 +865,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Group Actions (Students-first workflow)
   const createGroup = (data: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newGroupId = `g-${Date.now()}`;
 

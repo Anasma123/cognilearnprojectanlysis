@@ -23,14 +23,15 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
 
   const [studentStates, setStudentStates] = useState<Record<string, { status: AttendanceStatus; remarks: string }>>({});
 
-  // Initialize or update statuses when group changes
+  // Initialize or update statuses when group changes or modal opens
   React.useEffect(() => {
+    if (!isOpen) return;
     const initial: Record<string, { status: AttendanceStatus; remarks: string }> = {};
     groupStudents.forEach(s => {
       initial[s.id] = { status: 'present', remarks: '' };
     });
     setStudentStates(initial);
-  }, [selectedGroupId, students]);
+  }, [selectedGroupId, isOpen]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     setStudentStates(prev => ({

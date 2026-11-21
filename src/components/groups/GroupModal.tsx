@@ -40,6 +40,8 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
   const [filterMode, setFilterMode] = useState<'available' | 'all' | 'selected'>('available');
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (groupToEdit) {
       const currentMemberIds = groupToEdit.member_ids ||
         students.filter(s => s.group_id === groupToEdit.id).map(s => s.id);
@@ -77,7 +79,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
       setSelectedStudentIds([]);
     }
     setStudentSearch('');
-  }, [groupToEdit, isOpen, colleges, courses, staffMembers, students]);
+  }, [groupToEdit, isOpen]);
 
   // Check if a student already belongs to another group (excluding current editing group)
   const getStudentEnrolledGroup = (studentId: string) => {
