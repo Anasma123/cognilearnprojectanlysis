@@ -249,7 +249,7 @@ export type AttendanceSession = 'daily' | 'project_meeting';
 export interface AttendanceRecord {
   id: string;
   student_id: string;
-  group_id: string;
+  group_id?: string;
   date: string;
   status: AttendanceStatus;
   session_type: AttendanceSession;
