@@ -75,6 +75,8 @@ interface AppContextType {
   payments: StudentPayment[];
   staffMembers: StaffMember[];
   stats: DashboardStats;
+  allStudents: Student[];
+  allGroups: Group[];
   
   // College & Department Actions
   addCollege: (name: string, code?: string) => College;
@@ -156,17 +158,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const auth = localStorage.getItem('cognilearn_auth');
+      const savedUserStr = localStorage.getItem('cognilearn_auth_user');
+      if (savedUserStr) {
+        try {
+          const u = JSON.parse(savedUserStr);
+          if (u && u.id) {
+            setIsAuthenticated(true);
+            setCurrentUser(u);
+            return;
+          }
+        } catch { }
+      }
+
       if (auth === 'admin') {
         setIsAuthenticated(true);
         setCurrentUser(initialProfiles[0]);
       } else if (auth === 'staff') {
         setIsAuthenticated(true);
-        setCurrentUser(initialProfiles[1] || {
-          id: '00000000-0000-0000-0000-000000000002',
-          email: 'staff@cognilearn.org',
-          full_name: 'Staff Coordinator',
+        const defaultStaff = initialStaff.find(s => s.role === 'staff') || initialStaff[1];
+        setCurrentUser({
+          id: defaultStaff?.id || 'staff-coord-02',
+          email: defaultStaff?.email || 'staff@cognilearn.org',
+          full_name: defaultStaff?.full_name || 'Staff Coordinator',
           role: 'staff',
-          phone: '+91 98470 55667',
+          phone: defaultStaff?.phone || '+91 98470 55667',
           is_active: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -196,6 +211,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(initialProfiles[0]);
       if (typeof window !== 'undefined') {
         localStorage.setItem('cognilearn_auth', 'admin');
+        localStorage.setItem('cognilearn_auth_user', JSON.stringify(initialProfiles[0]));
       }
       return true;
     }
@@ -203,12 +219,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // 2. Staff login
     if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && pass === staffPass) {
       setIsAuthenticated(true);
-      const staffUser: UserProfile = initialProfiles[1] || {
-        id: '00000000-0000-0000-0000-000000000002',
-        email: 'staff@cognilearn.org',
-        full_name: 'Staff Coordinator',
+      const staffMember = staffMembers.find(s => s.role === 'staff') || initialStaff.find(s => s.role === 'staff') || initialStaff[1];
+      const staffUser: UserProfile = {
+        id: staffMember?.id || 'staff-coord-02',
+        email: staffMember?.email || 'staff@cognilearn.org',
+        full_name: staffMember?.full_name || 'Staff Coordinator',
         role: 'staff',
-        phone: '+91 98470 55667',
+        phone: staffMember?.phone || '+91 98470 55667',
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -216,6 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(staffUser);
       if (typeof window !== 'undefined') {
         localStorage.setItem('cognilearn_auth', 'staff');
+        localStorage.setItem('cognilearn_auth_user', JSON.stringify(staffUser));
       }
       return true;
     }
@@ -241,6 +259,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(dynamicUser);
       if (typeof window !== 'undefined') {
         localStorage.setItem('cognilearn_auth', matchedStaff.role === 'admin' ? 'admin' : 'staff');
+        localStorage.setItem('cognilearn_auth_user', JSON.stringify(dynamicUser));
       }
       return true;
     }
@@ -252,6 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsAuthenticated(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('cognilearn_auth');
+      localStorage.removeItem('cognilearn_auth_user');
     }
   };
 
@@ -554,15 +574,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).filter(Boolean) as StudentPayment[];
   }, [payments, students, groups]);
 
-  // Compute live dashboard stats
+  // Helper to determine if a group belongs to the currently logged-in user
+  const isUserInChargeOfGroup = (g: Group) => {
+    if (currentUser.role === 'admin') return true;
+    return (
+      g.mentor_id === currentUser.id ||
+      (currentUser.id === '00000000-0000-0000-0000-000000000002' && (g.mentor_id === 'staff-coord-02' || g.mentor_id === '00000000-0000-0000-0000-000000000002')) ||
+      (currentUser.full_name && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.full_name.toLowerCase())) ||
+      (currentUser.email && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.email.toLowerCase()))
+    );
+  };
+
+  // Filtered views based on staff in-charge assignment
+  const visibleGroups = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedGroups;
+    return enrichedGroups.filter(isUserInChargeOfGroup);
+  }, [enrichedGroups, currentUser]);
+
+  const visibleStudents = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedStudents;
+    const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
+    const allowedMemberIds = new Set<string>();
+    visibleGroups.forEach(g => {
+      (g.member_ids || []).forEach(mid => allowedMemberIds.add(mid));
+    });
+
+    return enrichedStudents.filter(s => {
+      return (s.group_id && allowedGroupIds.has(s.group_id)) || allowedMemberIds.has(s.id);
+    });
+  }, [enrichedStudents, visibleGroups, currentUser]);
+
+  const visibleProjects = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedProjects;
+    const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
+    return enrichedProjects.filter(p => allowedGroupIds.has(p.group_id));
+  }, [enrichedProjects, visibleGroups, currentUser]);
+
+  const visibleTasks = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedTasks;
+    const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
+    const allowedStudentIds = new Set(visibleStudents.map(s => s.id));
+    return enrichedTasks.filter(t => 
+      (t.group_id && allowedGroupIds.has(t.group_id)) ||
+      (t.assigned_student_id && allowedStudentIds.has(t.assigned_student_id)) ||
+      (t.project_id && visibleProjects.some(p => p.id === t.project_id))
+    );
+  }, [enrichedTasks, visibleGroups, visibleStudents, visibleProjects, currentUser]);
+
+  const visibleWeeklyReports = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedWeeklyReports;
+    const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
+    return enrichedWeeklyReports.filter(w => allowedGroupIds.has(w.group_id));
+  }, [enrichedWeeklyReports, visibleGroups, currentUser]);
+
+  const visibleAttendance = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedAttendance;
+    const allowedStudentIds = new Set(visibleStudents.map(s => s.id));
+    const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
+    return enrichedAttendance.filter(a => 
+      allowedStudentIds.has(a.student_id) || (a.group_id && allowedGroupIds.has(a.group_id))
+    );
+  }, [enrichedAttendance, visibleStudents, visibleGroups, currentUser]);
+
+  const visiblePayments = useMemo(() => {
+    if (currentUser.role === 'admin') return enrichedPayments;
+    const allowedStudentIds = new Set(visibleStudents.map(s => s.id));
+    return enrichedPayments.filter(p => allowedStudentIds.has(p.student_id));
+  }, [enrichedPayments, visibleStudents, currentUser]);
+
+  // Compute live dashboard stats (scoped to role-based visibility)
   const stats: DashboardStats = useMemo(() => {
-    const studs = Array.isArray(students) ? students : [];
-    const grps = Array.isArray(groups) ? groups : [];
-    const projs = Array.isArray(enrichedProjects) ? enrichedProjects : [];
-    const tsks = Array.isArray(tasks) ? tasks : [];
-    const attnd = Array.isArray(attendance) ? attendance : [];
-    const rprts = Array.isArray(weeklyReports) ? weeklyReports : [];
-    const pymnts = Array.isArray(payments) ? payments : [];
+    const studs = visibleStudents;
+    const grps = visibleGroups;
+    const projs = visibleProjects;
+    const tsks = visibleTasks;
+    const attnd = visibleAttendance;
+    const rprts = visibleWeeklyReports;
+    const pymnts = visiblePayments;
 
     const totalStudents = studs.length;
     const totalGroups = grps.length;
@@ -615,7 +703,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       totalFeeCollected,
       totalFeePending
     };
-  }, [students, groups, projects, attendance, tasks, weeklyReports, payments]);
+  }, [visibleStudents, visibleGroups, visibleProjects, visibleTasks, visibleAttendance, visibleWeeklyReports, visiblePayments]);
 
   // Role switcher
   const switchRole = (role: UserRole) => {
@@ -1453,20 +1541,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         colleges,
         courses,
         mentors,
-        students: enrichedStudents,
-        groups: enrichedGroups,
-        projects: enrichedProjects,
+        students: visibleStudents,
+        groups: visibleGroups,
+        projects: visibleProjects,
         milestones,
-        tasks: enrichedTasks,
-        weeklyReports: enrichedWeeklyReports,
-        attendance: enrichedAttendance,
+        tasks: visibleTasks,
+        weeklyReports: visibleWeeklyReports,
+        attendance: visibleAttendance,
         evaluations,
         documents,
         notifications,
         activityLogs,
-        payments: enrichedPayments,
+        payments: visiblePayments,
         staffMembers,
         stats,
+        allStudents: enrichedStudents,
+        allGroups: enrichedGroups,
         addCollege,
         deleteCollege,
         addCourse,

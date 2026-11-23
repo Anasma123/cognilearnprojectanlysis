@@ -13,7 +13,7 @@ interface GroupModalProps {
 }
 
 export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
-  const { colleges, courses, staffMembers, students, groups, createGroup, updateGroup, addCollege, addCourse } = useApp();
+  const { colleges, courses, staffMembers, students, groups, allStudents, allGroups, currentUser, createGroup, updateGroup, addCollege, addCourse } = useApp();
 
   const [formData, setFormData] = useState({
     group_code: '',
@@ -62,14 +62,18 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
       });
       setSelectedStudentIds(currentMemberIds);
     } else {
+      const defaultStaff = (currentUser.role === 'staff')
+        ? (staffMembers.find(s => s.id === currentUser.id || s.email === currentUser.email) || staffMembers[0])
+        : staffMembers[0];
+
       setFormData({
-        group_code: `MES-GRP-${Math.floor(10 + Math.random() * 90)}`,
+        group_code: `GRP-${Math.floor(100 + Math.random() * 900)}`,
         name: '',
         college_id: colleges[0]?.id || '',
         course_id: courses[0]?.id || '',
         class_year: 'Final Year (Semester 8)',
-        mentor_id: staffMembers[0]?.id || '',
-        coordinator_name: staffMembers[0]?.full_name || 'Admin Coordinator',
+        mentor_id: defaultStaff?.id || '',
+        coordinator_name: defaultStaff?.full_name || 'Admin Coordinator',
         group_leader_id: '',
         project_title: '',
         start_date: new Date().toISOString().split('T')[0],
@@ -83,10 +87,12 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
 
   // Check if a student already belongs to another group (excluding current editing group)
   const getStudentEnrolledGroup = (studentId: string) => {
-    return (groups || []).find(g => {
+    const groupList = allGroups || groups || [];
+    const studentList = allStudents || students || [];
+    return groupList.find(g => {
       if (groupToEdit && g.id === groupToEdit.id) return false;
       const isMember = Array.isArray(g.member_ids) && g.member_ids.includes(studentId);
-      const studentObj = students.find(s => s.id === studentId);
+      const studentObj = studentList.find(s => s.id === studentId);
       const isDirectGroup = studentObj?.group_id === g.id && (!groupToEdit || g.id !== groupToEdit.id);
       return isMember || isDirectGroup;
     });
@@ -120,14 +126,14 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
     setFormData(f => ({
       ...f,
       mentor_id: staffId,
-      coordinator_name: staff ? `${staff.full_name} (${staff.designation})` : ''
+      coordinator_name: staff ? `${staff.full_name}` : ''
     }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.group_code) {
-      alert('Please fill group code and name');
+    if (!formData.name.trim()) {
+      alert('Please enter group name');
       return;
     }
 
@@ -158,8 +164,21 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
       }
     }
 
+    // Auto-generate group code if not present
+    const groupCode = formData.group_code || `GRP-${Math.floor(100 + Math.random() * 900)}`;
+
+    // Auto-calculate expected completion date if not present (default: 6 months from start date)
+    let expectedDate = formData.expected_completion_date;
+    if (!expectedDate) {
+      const sDate = new Date(formData.start_date || Date.now());
+      sDate.setMonth(sDate.getMonth() + 6);
+      expectedDate = sDate.toISOString().split('T')[0];
+    }
+
     const payload = {
       ...formData,
+      group_code: groupCode,
+      expected_completion_date: expectedDate,
       college_id: finalCollegeId,
       course_id: finalCourseId,
       member_ids: selectedStudentIds
@@ -174,12 +193,14 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
   };
 
   const availableStudentsCount = useMemo(() => {
-    return students.filter(s => !getStudentEnrolledGroup(s.id)).length;
-  }, [students, groups, groupToEdit]);
+    const list = allStudents || students || [];
+    return list.filter(s => !getStudentEnrolledGroup(s.id)).length;
+  }, [students, allStudents, groups, allGroups, groupToEdit]);
 
   // Filter students for the selector
   const availableStudents = useMemo(() => {
-    return students.filter(s => {
+    const list = allStudents || students || [];
+    return list.filter(s => {
       const matchesSearch = s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
         s.student_reg_no.toLowerCase().includes(studentSearch.toLowerCase());
       if (!matchesSearch) return false;
@@ -193,9 +214,12 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
       }
       return true;
     });
-  }, [students, studentSearch, filterMode, selectedStudentIds, groups, groupToEdit]);
+  }, [students, allStudents, studentSearch, filterMode, selectedStudentIds, groups, allGroups, groupToEdit]);
 
-  const selectedStudents = students.filter(s => selectedStudentIds.includes(s.id));
+  const selectedStudents = useMemo(() => {
+    const list = allStudents || students || [];
+    return list.filter(s => selectedStudentIds.includes(s.id));
+  }, [allStudents, students, selectedStudentIds]);
 
   return (
     <Modal
@@ -207,21 +231,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Group Code *
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.group_code}
-              onChange={(e) => setFormData({ ...formData, group_code: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none font-mono"
-              placeholder="e.g. MES-GRP-01"
-            />
-          </div>
-
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Group Name *
             </label>
@@ -362,7 +372,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
             />
           </div>
 
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Start Date *
             </label>
@@ -371,19 +381,6 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
               required
               value={formData.start_date}
               onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Expected Completion Date *
-            </label>
-            <input
-              type="date"
-              required
-              value={formData.expected_completion_date}
-              onChange={(e) => setFormData({ ...formData, expected_completion_date: e.target.value })}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
             />
           </div>
