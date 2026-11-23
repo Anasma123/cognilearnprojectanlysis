@@ -463,3 +463,343 @@ export function generateCollegeReportPdf({
   addReportFooter(doc);
   doc.save(`College_${collegeName.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`);
 }
+
+/**
+ * Generate Automated Group Intelligence & Progress Audit PDF (Weekly & Overall)
+ */
+export function generateAutomatedGroupReportPdf(data: {
+  groupName: string;
+  groupCode: string;
+  projectTitle: string;
+  projectCode: string;
+  status: string;
+  progressPercentage: number;
+  timeframe: string;
+  mentorName: string;
+  leaderName: string;
+  attendanceRate: number;
+  completedTasks: number;
+  totalTasks: number;
+  completedMilestones: number;
+  totalMilestones: number;
+  presentationsCount: number;
+  feeTotal: number;
+  feePaid: number;
+  feeBalance: number;
+  aiSummary: string;
+  members: { name: string; regNo: string; role: string; attendance: string }[];
+  tasksList: { title: string; priority: string; status: string; assignee: string }[];
+}) {
+  const doc = new jsPDF();
+  addCognilearnHeader(
+    doc,
+    `GROUP PROGRESS AUDIT: ${data.groupCode}`,
+    `Scope: ${data.timeframe} | Group: ${data.groupName} | System-Generated Audit`
+  );
+
+  // Executive AI Summary Banner
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(14, 49, 182, 24, 2, 2, 'F');
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...ACCENT_COLOR);
+  doc.text('AI EXECUTIVE SYNTHESIS & AUDIT BRIEF:', 18, 55);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 41, 59);
+  const splitAi = doc.splitTextToSize(data.aiSummary, 174);
+  doc.text(splitAi, 18, 60);
+
+  // KPI Summary Grid
+  const kpiData = [
+    ['Project Velocity', `${data.progressPercentage}% (${data.status.toUpperCase()})`, 'Attendance Rate', `${data.attendanceRate}%`],
+    ['Project Code', data.projectCode || '-', 'Presentations', `${data.presentationsCount} Round(s)`],
+    ['Tasks Completed', `${data.completedTasks} of ${data.totalTasks}`, 'Milestones Done', `${data.completedMilestones} of ${data.totalMilestones}`],
+    ['Fee Clearance', `Paid: ${formatCurrencyIndian(data.feePaid)} / Due: ${formatCurrencyIndian(data.feeBalance)}`, 'Mentor', data.mentorName || 'Assigned Mentor']
+  ];
+
+  autoTable(doc, {
+    startY: 77,
+    head: [['Metric', 'Details', 'Metric', 'Details']],
+    body: kpiData,
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 2.5 }
+  });
+
+  // Group Members Table
+  let currentY = (doc as any).lastAutoTable.finalY + 6;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Group Members Cohort:', 14, currentY);
+
+  const memberRows = data.members.map((m, idx) => [
+    idx + 1,
+    m.regNo,
+    m.name,
+    m.role,
+    m.attendance
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Reg No', 'Member Name', 'Role in Group', 'Attendance']],
+    body: memberRows.length > 0 ? memberRows : [['-', '-', 'No registered members', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, cellPadding: 2.2 }
+  });
+
+  // Active Tasks Table
+  currentY = (doc as any).lastAutoTable.finalY + 6;
+  if (currentY > 220) {
+    doc.addPage();
+    currentY = 25;
+  }
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Key Tasks & Sprint Deliverables:', 14, currentY);
+
+  const taskRows = data.tasksList.slice(0, 10).map((t, idx) => [
+    idx + 1,
+    t.title,
+    t.priority.toUpperCase(),
+    t.status.toUpperCase(),
+    t.assignee
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Task Deliverable', 'Priority', 'Status', 'Assignee']],
+    body: taskRows.length > 0 ? taskRows : [['-', 'No assigned tasks logged', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7, cellPadding: 2 }
+  });
+
+  // Signatures
+  let sigY = (doc as any).lastAutoTable.finalY + 16;
+  if (sigY > 250) {
+    doc.addPage();
+    sigY = 30;
+  }
+
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  doc.line(14, sigY, 65, sigY);
+  doc.line(135, sigY, 196, sigY);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Project Mentor Signature', 14, sigY + 4);
+  doc.text('Cognilearn Academic Cell', 135, sigY + 4);
+
+  addReportFooter(doc);
+  doc.save(`Group_${data.groupCode}_${data.timeframe.replace(/\s+/g, '_')}_Audit.pdf`);
+}
+
+/**
+ * Generate Automated Student Performance Audit PDF (Weekly & Overall)
+ */
+export function generateAutomatedStudentReportPdf(data: {
+  studentName: string;
+  regNo: string;
+  groupCode: string;
+  groupName: string;
+  role: string;
+  department: string;
+  timeframe: string;
+  attendanceRate: number;
+  attendedSessions: number;
+  totalSessions: number;
+  completedTasks: number;
+  totalTasks: number;
+  feePaid: number;
+  feeBalance: number;
+  paymentStatus: string;
+  aiSummary: string;
+  tasksList: { title: string; priority: string; status: string }[];
+}) {
+  const doc = new jsPDF();
+  addCognilearnHeader(
+    doc,
+    `STUDENT PERFORMANCE: ${data.regNo}`,
+    `Scope: ${data.timeframe} | Student: ${data.studentName} | Automated Academic Audit`
+  );
+
+  // Executive AI Summary Banner
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(14, 49, 182, 24, 2, 2, 'F');
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...ACCENT_COLOR);
+  doc.text('AI STUDENT PERFORMANCE SYNOPSIS:', 18, 55);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 41, 59);
+  const splitAi = doc.splitTextToSize(data.aiSummary, 174);
+  doc.text(splitAi, 18, 60);
+
+  // Student Profile KPI Grid
+  const kpiData = [
+    ['Full Name', data.studentName, 'Register No', data.regNo],
+    ['Group Assigned', `${data.groupName} (${data.groupCode})`, 'Assigned Role', data.role || 'Member'],
+    ['Department', data.department || '-', 'Attendance', `${data.attendanceRate}% (${data.attendedSessions}/${data.totalSessions} sessions)`],
+    ['Tasks Throughput', `${data.completedTasks} of ${data.totalTasks} Done`, 'Fee Standing', `${data.paymentStatus.toUpperCase()} (Bal: ${formatCurrencyIndian(data.feeBalance)})`]
+  ];
+
+  autoTable(doc, {
+    startY: 77,
+    head: [['Field', 'Details', 'Field', 'Details']],
+    body: kpiData,
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 2.5 }
+  });
+
+  // Assigned Tasks
+  let currentY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Student Assigned Deliverables:', 14, currentY);
+
+  const taskRows = data.tasksList.map((t, idx) => [
+    idx + 1,
+    t.title,
+    t.priority.toUpperCase(),
+    t.status.toUpperCase()
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Task Title', 'Priority', 'Status']],
+    body: taskRows.length > 0 ? taskRows : [['-', 'No individually assigned tasks', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, cellPadding: 2.2 }
+  });
+
+  // Signatures
+  let sigY = (doc as any).lastAutoTable.finalY + 20;
+  if (sigY > 250) {
+    doc.addPage();
+    sigY = 30;
+  }
+
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  doc.line(14, sigY, 65, sigY);
+  doc.line(135, sigY, 196, sigY);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Mentor Evaluation Signature', 14, sigY + 4);
+  doc.text('Dean / Academic Controller', 135, sigY + 4);
+
+  addReportFooter(doc);
+  doc.save(`Student_${data.regNo}_${data.timeframe.replace(/\s+/g, '_')}_Audit.pdf`);
+}
+
+/**
+ * Generate PDF for Filtered Groups Search Results
+ */
+export function generateFilteredGroupsPdf(
+  groups: Group[],
+  projects: Project[],
+  filterTitle = 'Cohort Groups Audit Report'
+) {
+  const doc = new jsPDF();
+  addCognilearnHeader(
+    doc,
+    filterTitle.toUpperCase(),
+    `Filtered Cohort Directory | Total Records: ${groups.length} Groups`
+  );
+
+  const rows = groups.map((g, idx) => {
+    const prj = projects.find(p => p.group_id === g.id);
+    const progress = prj?.progress_percentage ?? 0;
+    const phases = [
+      prj?.lifecycle_phases?.planning ? 'Plan' : '',
+      prj?.lifecycle_phases?.design ? 'Design' : '',
+      prj?.lifecycle_phases?.development ? 'Dev' : '',
+      prj?.lifecycle_phases?.testing ? 'Test' : ''
+    ].filter(Boolean).join(', ') || 'Planning';
+
+    return [
+      idx + 1,
+      g.group_code,
+      g.name,
+      prj?.title || g.project_title || 'N/A',
+      g.leader?.full_name || 'Assigned Lead',
+      g.mentor?.full_name || 'Staff Mentor',
+      phases,
+      `${progress}%`
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 48,
+    head: [['#', 'Code', 'Group Name', 'Project Title', 'Leader', 'Mentor', 'Phases', 'Velocity']],
+    body: rows.length > 0 ? rows : [['-', '-', 'No groups found matching filter', '-', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, cellPadding: 2.2 }
+  });
+
+  addReportFooter(doc);
+  doc.save(`Cognilearn_Filtered_Groups_${Date.now()}.pdf`);
+}
+
+/**
+ * Generate PDF for Filtered Students Search Results
+ */
+export function generateFilteredStudentsPdf(
+  students: Student[],
+  payments: StudentPayment[] = [],
+  attendanceRateMap: Map<string, { percentage: number; present: number; total: number }> = new Map(),
+  filterTitle = 'Student Academic & Fee Ledger Report'
+) {
+  const doc = new jsPDF();
+  addCognilearnHeader(
+    doc,
+    filterTitle.toUpperCase(),
+    `Filtered Student Ledger | Total Records: ${students.length} Enrolled Students`
+  );
+
+  const rows = students.map((s, idx) => {
+    const pay = payments.find(p => p.student_id === s.id);
+    const att = attendanceRateMap.get(s.id) || { percentage: 100, present: 0, total: 0 };
+    const feeStatus = pay?.status === 'paid' || (pay && pay.balance_amount <= 0)
+      ? 'Paid Full'
+      : `Due: INR ${pay?.balance_amount ?? 5000}`;
+
+    return [
+      idx + 1,
+      s.student_reg_no,
+      s.full_name,
+      s.course?.name || s.department || 'B.Tech',
+      s.group?.group_code || 'Unassigned',
+      s.assigned_role || 'Member',
+      `${att.percentage}% (${att.present}/${att.total})`,
+      feeStatus
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 48,
+    head: [['#', 'Reg No', 'Student Name', 'Course / Dept', 'Group', 'Role', 'Attendance', 'Fee Standing']],
+    body: rows.length > 0 ? rows : [['-', '-', 'No students found matching filter', '-', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, cellPadding: 2.2 }
+  });
+
+  addReportFooter(doc);
+  doc.save(`Cognilearn_Filtered_Students_${Date.now()}.pdf`);
+}

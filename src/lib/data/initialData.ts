@@ -16,7 +16,9 @@ import {
   ActivityLog,
   UserProfile,
   StudentPayment,
-  StaffMember
+  StaffMember,
+  DEFAULT_ADMIN_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSIONS
 } from '../types';
 
 // Admin account: username = admin, password = 123
@@ -30,6 +32,7 @@ export const initialProfiles: UserProfile[] = [
     phone: '+91 98470 11223',
     avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
     is_active: true,
+    permissions: DEFAULT_ADMIN_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -41,6 +44,7 @@ export const initialProfiles: UserProfile[] = [
     phone: '+91 98470 55667',
     avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     is_active: true,
+    permissions: DEFAULT_STAFF_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
@@ -73,6 +77,7 @@ export const initialStaff: StaffMember[] = [
     designation: 'Operations Director',
     department: 'Management',
     is_active: true,
+    permissions: DEFAULT_ADMIN_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -85,6 +90,7 @@ export const initialStaff: StaffMember[] = [
     designation: 'Staff In-Charge & Project Coordinator',
     department: 'Academic Supervision',
     is_active: true,
+    permissions: DEFAULT_STAFF_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }

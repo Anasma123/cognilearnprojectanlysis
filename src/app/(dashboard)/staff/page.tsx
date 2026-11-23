@@ -2,7 +2,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/lib/context/AppContext';
-import { StaffMember } from '@/lib/types';
+import {
+  StaffMember,
+  StaffPermissions,
+  DEFAULT_ADMIN_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSIONS
+} from '@/lib/types';
 import { formatDateIndian } from '@/lib/utils/formatters';
 import { Modal } from '@/components/ui/Modal';
 import {
@@ -18,8 +23,74 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
-  KeyRound
+  KeyRound,
+  ShieldAlert,
+  GraduationCap,
+  Users,
+  FolderKanban,
+  CalendarDays,
+  ListTodo,
+  CreditCard,
+  FileBarChart,
+  CalendarCheck2,
+  Check
 } from 'lucide-react';
+
+const PERMISSION_CONFIG: Array<{
+  key: keyof StaffPermissions;
+  label: string;
+  description: string;
+  icon: any;
+}> = [
+  {
+    key: 'manage_students',
+    label: 'Manage Students',
+    description: 'Enroll new students, modify academic profiles, manage roster',
+    icon: GraduationCap
+  },
+  {
+    key: 'manage_groups',
+    label: 'Manage Cohorts & Groups',
+    description: 'Create project teams, appoint team leaders & allocate cohorts',
+    icon: Users
+  },
+  {
+    key: 'manage_projects',
+    label: 'Manage Projects & 13 Stages',
+    description: 'Oversee project lifecycle, verify 4 phases & monitor milestones',
+    icon: FolderKanban
+  },
+  {
+    key: 'mark_attendance',
+    label: 'Mark Lab Attendance',
+    description: 'Record daily lab check-ins, batch attendance & mark absences',
+    icon: CalendarDays
+  },
+  {
+    key: 'assign_tasks',
+    label: 'Assign Tasks & Deliverables',
+    description: 'Delegate cohort broadcast tasks and individual assignments',
+    icon: ListTodo
+  },
+  {
+    key: 'record_payments',
+    label: 'Record Fee Payments',
+    description: 'Manage tuition collections, record UPI/Cash & print receipts',
+    icon: CreditCard
+  },
+  {
+    key: 'export_reports',
+    label: 'Academic Reports & PDFs',
+    description: 'Download filtered group/student dossiers & Excel audit records',
+    icon: FileBarChart
+  },
+  {
+    key: 'mentor_reviews',
+    label: 'Weekly Reviews & Feedback',
+    description: 'Audit weekly progress reports and publish mentor evaluation remarks',
+    icon: CalendarCheck2
+  }
+];
 
 export default function StaffPage() {
   const { staffMembers, addStaffMember, updateStaffMember, deleteStaffMember, currentUser } = useApp();
@@ -32,7 +103,7 @@ export default function StaffPage() {
   const [staffToEdit, setStaffToEdit] = useState<StaffMember | null>(null);
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
 
-  // Form State
+  // Form State with Granular Feature Toggles
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -40,7 +111,8 @@ export default function StaffPage() {
     role: 'staff' as 'admin' | 'staff',
     designation: 'Project Coordinator',
     department: 'Software Innovation Division',
-    is_active: true
+    is_active: true,
+    permissions: { ...DEFAULT_STAFF_PERMISSIONS }
   });
 
   const filteredStaff = useMemo(() => {
@@ -66,13 +138,15 @@ export default function StaffPage() {
       role: 'staff',
       designation: 'Project Coordinator',
       department: 'Software Innovation Division',
-      is_active: true
+      is_active: true,
+      permissions: { ...DEFAULT_STAFF_PERMISSIONS }
     });
     setShowAddModal(true);
   };
 
   const handleOpenEdit = (staff: StaffMember) => {
     setStaffToEdit(staff);
+    const existingPerms = staff.permissions || (staff.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS);
     setFormData({
       full_name: staff.full_name,
       email: staff.email,
@@ -80,9 +154,43 @@ export default function StaffPage() {
       role: staff.role,
       designation: staff.designation,
       department: staff.department || 'Software Innovation Division',
-      is_active: staff.is_active
+      is_active: staff.is_active,
+      permissions: { ...existingPerms }
     });
     setShowAddModal(true);
+  };
+
+  const handleRoleChange = (newRole: 'admin' | 'staff') => {
+    setFormData(prev => ({
+      ...prev,
+      role: newRole,
+      designation: newRole === 'admin' ? 'System Administrator' : (prev.designation === 'System Administrator' ? 'Project Coordinator' : prev.designation),
+      permissions: newRole === 'admin' ? { ...DEFAULT_ADMIN_PERMISSIONS } : { ...DEFAULT_STAFF_PERMISSIONS }
+    }));
+  };
+
+  const togglePermission = (key: keyof StaffPermissions) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [key]: !prev.permissions[key]
+      }
+    }));
+  };
+
+  const handleToggleAllPermissions = (enable: boolean) => {
+    const updated: StaffPermissions = {
+      manage_students: enable,
+      manage_groups: enable,
+      manage_projects: enable,
+      mark_attendance: enable,
+      assign_tasks: enable,
+      record_payments: enable,
+      export_reports: enable,
+      mentor_reviews: enable
+    };
+    setFormData(prev => ({ ...prev, permissions: updated }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -250,6 +358,45 @@ export default function StaffPage() {
                   <span>{staff.department || 'Software Lab'}</span>
                 </div>
               </div>
+
+              {/* Assigned Permissions Badges */}
+              <div className="mt-3.5 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Allowed Functions
+                  </span>
+                  {staff.role === 'staff' && (
+                    <span className="text-[10px] font-semibold text-blue-600">
+                      {PERMISSION_CONFIG.filter(p => staff.permissions?.[p.key] !== false).length} / 8 active
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {staff.role === 'admin' ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">
+                      <ShieldCheck className="w-3 h-3 text-purple-600" /> Full Administrator Access
+                    </span>
+                  ) : (
+                    PERMISSION_CONFIG.filter(p => staff.permissions?.[p.key] !== false).length === 0 ? (
+                      <span className="text-[11px] text-slate-400 italic">No functions permitted</span>
+                    ) : (
+                      PERMISSION_CONFIG.filter(p => staff.permissions?.[p.key] !== false).map(p => {
+                        const Icon = p.icon;
+                        return (
+                          <span
+                            key={p.key}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-100"
+                          >
+                            <Icon className="w-2.5 h-2.5" />
+                            {p.label}
+                          </span>
+                        );
+                      })
+                    )
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs">
@@ -262,15 +409,15 @@ export default function StaffPage() {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleOpenEdit(staff)}
-                    className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-slate-200 rounded-md transition-colors"
+                    className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
                     title="Edit Staff Member"
                   >
                     <Edit className="w-3.5 h-3.5" />
                   </button>
-                  {staff.id !== 'staff-1' && (
+                  {staff.id !== 'staff-1' && staff.id !== 'staff-admin-01' && (
                     <button
                       onClick={() => setStaffToDelete(staff)}
-                      className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                      className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                       title="Delete Staff Member"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -283,13 +430,13 @@ export default function StaffPage() {
         ))}
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* Add / Edit Modal with Permission Toggles */}
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title={staffToEdit ? 'Edit Staff Member' : 'Add Staff or Admin'}
-        subtitle="Configure system permissions and operational roles"
-        maxWidth="lg"
+        title={staffToEdit ? `Edit Staff Member (${staffToEdit.full_name})` : 'Add Staff or Administrator'}
+        subtitle="Configure profile details and toggle granular operational permissions"
+        maxWidth="2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -340,11 +487,11 @@ export default function StaffPage() {
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                onChange={(e) => handleRoleChange(e.target.value as any)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
               >
-                <option value="admin">Administrator (Full Control)</option>
                 <option value="staff">Staff / Project Coordinator</option>
+                <option value="admin">Administrator (Full Control)</option>
               </select>
             </div>
 
@@ -376,7 +523,7 @@ export default function StaffPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1 pb-1">
             <input
               type="checkbox"
               id="isActiveCheck"
@@ -384,22 +531,102 @@ export default function StaffPage() {
               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
               className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
             />
-            <label htmlFor="isActiveCheck" className="text-xs font-medium text-slate-700">
-              Account Active (Can log in and manage cohorts)
+            <label htmlFor="isActiveCheck" className="text-xs font-medium text-slate-700 cursor-pointer">
+              Account Active (Can log in and access system)
             </label>
+          </div>
+
+          {/* Granular Permission Toggles Section */}
+          <div className="pt-3 border-t border-slate-200">
+            <div className="flex items-center justify-between mb-2.5">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  Allowed Functions & Operational Permissions
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Toggle the specific administrative modules this staff member is authorized to access
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleToggleAllPermissions(true)}
+                  className="px-2 py-1 rounded text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                >
+                  Enable All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleAllPermissions(false)}
+                  className="px-2 py-1 rounded text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Disable All
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+              {PERMISSION_CONFIG.map((p) => {
+                const Icon = p.icon;
+                const isEnabled = Boolean(formData.permissions[p.key]);
+
+                return (
+                  <div
+                    key={p.key}
+                    onClick={() => togglePermission(p.key)}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                      isEnabled
+                        ? 'bg-blue-50/70 border-blue-200 shadow-2xs'
+                        : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70 opacity-75'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 pr-2">
+                      <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                        isEnabled ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-bold ${isEnabled ? 'text-blue-950' : 'text-slate-700'}`}>
+                          {p.label}
+                        </p>
+                        <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                          {p.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* iOS style Toggle Switch */}
+                    <div
+                      className={`shrink-0 w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                        isEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                          isEnabled ? 'translate-x-4.5' : 'translate-x-0'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowAddModal(false)}
-              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               {staffToEdit ? 'Save Changes' : 'Create Staff Account'}
             </button>

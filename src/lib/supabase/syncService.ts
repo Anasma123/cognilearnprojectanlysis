@@ -10,7 +10,9 @@ import {
   WeeklyReport,
   AttendanceRecord,
   StudentPayment,
-  StaffMember
+  StaffMember,
+  DEFAULT_ADMIN_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSIONS
 } from '../types';
 
 export interface CloudDatabaseSnapshot {
@@ -28,11 +30,59 @@ export interface CloudDatabaseSnapshot {
   isCloudLoaded: boolean;
 }
 
-// Strip relational / joined fields before upserting into Supabase tables
+// RFC4122 v4 UUID Validator & Generator
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function ensureUUID(id?: string): string {
+  if (id && UUID_REGEX.test(id)) return id;
+  return generateUUID();
+}
+
+// All UUID columns in PostgreSQL schema that must never receive empty string "" or non-UUID
+const UUID_COLUMNS = new Set([
+  'id',
+  'college_id',
+  'course_id',
+  'batch_id',
+  'mentor_id',
+  'group_id',
+  'project_id',
+  'student_id',
+  'profile_id',
+  'group_leader_id',
+  'assigned_student_id',
+  'user_id',
+  'created_by'
+]);
+
+// Strip relational / joined fields & sanitize UUID columns before sending to Supabase
 function cleanRecord<T extends Record<string, any>>(record: T, relationsToStrip: string[]): Record<string, any> {
   const clean: Record<string, any> = {};
   for (const [k, v] of Object.entries(record)) {
-    if (!relationsToStrip.includes(k) && v !== undefined) {
+    if (relationsToStrip.includes(k) || v === undefined) {
+      continue;
+    }
+
+    if (UUID_COLUMNS.has(k)) {
+      if (k === 'id') {
+        clean[k] = ensureUUID(v);
+      } else if (!v || v === '' || v === 'null' || !UUID_REGEX.test(String(v))) {
+        clean[k] = null;
+      } else {
+        clean[k] = v;
+      }
+    } else {
       clean[k] = v;
     }
   }
@@ -40,7 +90,49 @@ function cleanRecord<T extends Record<string, any>>(record: T, relationsToStrip:
 }
 
 export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
-  // If client-side Supabase client is configured, try direct connection first
+  // 1. Try server API route fallback first (/api/sync) as it uses Service Role key and bypasses RLS
+  try {
+    const res = await fetch('/api/sync');
+    if (res.ok) {
+      const json = await res.json();
+      if (json.configured && json.data) {
+        const d = json.data;
+        const staffMembers: StaffMember[] = (d.staffMembers || []).map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name,
+          email: p.email,
+          phone: p.phone,
+          role: (p.role === 'admin' ? 'admin' : 'staff') as 'admin' | 'staff',
+          designation: p.designation || (p.role === 'admin' ? 'Administrator' : 'Staff Coordinator'),
+          department: p.department || 'Management',
+          is_active: p.is_active ?? true,
+          permissions: p.permissions || (p.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
+          avatar_url: p.avatar_url,
+          created_at: p.created_at || new Date().toISOString(),
+          updated_at: p.updated_at || new Date().toISOString()
+        }));
+
+        return {
+          colleges: d.colleges || [],
+          courses: d.courses || [],
+          students: d.students || [],
+          groups: d.groups || [],
+          projects: d.projects || [],
+          milestones: d.milestones || [],
+          tasks: d.tasks || [],
+          weeklyReports: d.weeklyReports || [],
+          attendance: d.attendance || [],
+          payments: d.payments || [],
+          staffMembers,
+          isCloudLoaded: true
+        };
+      }
+    }
+  } catch (err) {
+    // console.warn('Server sync route notice:', err);
+  }
+
+  // 2. Direct Supabase client fallback
   if (supabase && isSupabaseConfigured) {
     try {
       const [
@@ -79,6 +171,7 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
           designation: p.designation || (p.role === 'admin' ? 'Administrator' : 'Staff Coordinator'),
           department: p.department || 'Management',
           is_active: p.is_active ?? true,
+          permissions: p.permissions || (p.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
           avatar_url: p.avatar_url,
           created_at: p.created_at || new Date().toISOString(),
           updated_at: p.updated_at || new Date().toISOString()
@@ -100,51 +193,11 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
         };
       }
     } catch (err) {
-      console.warn('Direct Supabase fetch failed, falling back to server API route:', err);
+      console.warn('Direct Supabase fetch notice:', err);
     }
   }
 
-  // Server API route fallback (/api/sync)
-  try {
-    const res = await fetch('/api/sync');
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.configured && json.data) {
-      const d = json.data;
-      const staffMembers: StaffMember[] = (d.staffMembers || []).map((p: any) => ({
-        id: p.id,
-        full_name: p.full_name,
-        email: p.email,
-        phone: p.phone,
-        role: (p.role === 'admin' ? 'admin' : 'staff') as 'admin' | 'staff',
-        designation: p.designation || (p.role === 'admin' ? 'Administrator' : 'Staff Coordinator'),
-        department: p.department || 'Management',
-        is_active: p.is_active ?? true,
-        avatar_url: p.avatar_url,
-        created_at: p.created_at || new Date().toISOString(),
-        updated_at: p.updated_at || new Date().toISOString()
-      }));
-
-      return {
-        colleges: d.colleges || [],
-        courses: d.courses || [],
-        students: d.students || [],
-        groups: d.groups || [],
-        projects: d.projects || [],
-        milestones: d.milestones || [],
-        tasks: d.tasks || [],
-        weeklyReports: d.weeklyReports || [],
-        attendance: d.attendance || [],
-        payments: d.payments || [],
-        staffMembers,
-        isCloudLoaded: true
-      };
-    }
-    return null;
-  } catch (err) {
-    console.warn('Cloud fetch notice:', err);
-    return null;
-  }
+  return null;
 }
 
 // Migrate/Seed Supabase with existing local state if Supabase has 0 records
@@ -162,13 +215,10 @@ export async function seedCloudDataIfEmpty(snapshot: {
   staffMembers: StaffMember[];
 }): Promise<boolean> {
   try {
-    // Check if cloud already has records
     const current = await fetchCloudData();
     if (current && (current.students.length > 0 || current.colleges.length > 0)) {
-      return false; // Already has cloud data
+      return false;
     }
-
-    console.log('Seeding Supabase with local dataset...');
 
     if (snapshot.colleges.length > 0) {
       await cloudInsertMany('colleges', snapshot.colleges, []);
@@ -212,7 +262,6 @@ export async function seedCloudDataIfEmpty(snapshot: {
       await cloudInsertMany('profiles', staffPayload, []);
     }
 
-    console.log('Seeding to Supabase finished successfully!');
     return true;
   } catch (err) {
     console.warn('Could not seed local data to Supabase:', err);
@@ -220,50 +269,49 @@ export async function seedCloudDataIfEmpty(snapshot: {
   }
 }
 
-// Real-time Cloud Mutation Helpers (Direct Supabase + API Route fallback)
+// Real-time Cloud Mutation Helpers: Always use server API route first to bypass RLS with Service Role Key
 export async function cloudUpsert(table: string, data: Record<string, any>, relationsToStrip: string[] = []) {
   const payload = cleanRecord(data, relationsToStrip);
 
-  if (supabase && isSupabaseConfigured) {
-    try {
-      const { error } = await supabase.from(table).upsert(payload);
-      if (!error) return;
-    } catch (err) {
-      console.warn(`Direct upsert failed on ${table}, trying server route:`, err);
-    }
-  }
-
-  // Fallback to server-side sync API
   try {
-    await fetch('/api/sync', {
+    const res = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'upsert', table, record: payload })
     });
+    if (res.ok) return;
   } catch (err) {
-    console.warn(`Server route upsert failed on ${table}:`, err);
+    // console.warn(`Server route upsert notice on ${table}:`, err);
+  }
+
+  // Direct Supabase fallback
+  if (supabase && isSupabaseConfigured) {
+    try {
+      await supabase.from(table).upsert(payload);
+    } catch (err) {
+      console.warn(`Direct upsert notice on ${table}:`, err);
+    }
   }
 }
 
 export async function cloudDelete(table: string, id: string) {
-  if (supabase && isSupabaseConfigured) {
-    try {
-      const { error } = await supabase.from(table).delete().eq('id', id);
-      if (!error) return;
-    } catch (err) {
-      console.warn(`Direct delete failed on ${table}, trying server route:`, err);
-    }
-  }
-
-  // Fallback to server-side sync API
   try {
-    await fetch('/api/sync', {
+    const res = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', table, id })
     });
+    if (res.ok) return;
   } catch (err) {
-    console.warn(`Server route delete failed on ${table}:`, err);
+    // console.warn(`Server route delete notice on ${table}:`, err);
+  }
+
+  if (supabase && isSupabaseConfigured) {
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      console.warn(`Direct delete notice on ${table}:`, err);
+    }
   }
 }
 
@@ -271,23 +319,22 @@ export async function cloudInsertMany(table: string, records: Record<string, any
   if (!records || records.length === 0) return;
   const payload = records.map(r => cleanRecord(r, relationsToStrip));
 
-  if (supabase && isSupabaseConfigured) {
-    try {
-      const { error } = await supabase.from(table).upsert(payload);
-      if (!error) return;
-    } catch (err) {
-      console.warn(`Direct batch upsert failed on ${table}, trying server route:`, err);
-    }
-  }
-
-  // Fallback to server-side sync API
   try {
-    await fetch('/api/sync', {
+    const res = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'upsert_many', table, records: payload })
     });
+    if (res.ok) return;
   } catch (err) {
-    console.warn(`Server route batch upsert failed on ${table}:`, err);
+    // console.warn(`Server route batch upsert notice on ${table}:`, err);
+  }
+
+  if (supabase && isSupabaseConfigured) {
+    try {
+      await supabase.from(table).upsert(payload);
+    } catch (err) {
+      console.warn(`Direct batch upsert notice on ${table}:`, err);
+    }
   }
 }

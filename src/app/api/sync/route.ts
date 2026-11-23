@@ -96,14 +96,20 @@ export async function POST(req: Request) {
     const { action, table, record, records, id } = body;
 
     if (action === 'upsert' && table && record) {
-      const { data, error } = await client.from(table).upsert(record).select();
-      if (error) throw error;
+      const { data, error } = await client.from(table).upsert(record);
+      if (error) {
+        console.warn(`Sync upsert error on ${table}:`, error);
+        throw error;
+      }
       return NextResponse.json({ success: true, data });
     }
 
     if (action === 'upsert_many' && table && records) {
-      const { data, error } = await client.from(table).upsert(records).select();
-      if (error) throw error;
+      const { data, error } = await client.from(table).upsert(records);
+      if (error) {
+        console.warn(`Sync upsert_many error on ${table}:`, error);
+        throw error;
+      }
       return NextResponse.json({ success: true, data });
     }
 

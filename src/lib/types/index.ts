@@ -9,6 +9,39 @@ export function hasAdminPrivileges(role?: UserRole | string): boolean {
   return role === 'admin' || role === 'staff';
 }
 
+export interface StaffPermissions {
+  manage_students: boolean;
+  manage_groups: boolean;
+  manage_projects: boolean;
+  mark_attendance: boolean;
+  assign_tasks: boolean;
+  record_payments: boolean;
+  export_reports: boolean;
+  mentor_reviews: boolean;
+}
+
+export const DEFAULT_ADMIN_PERMISSIONS: StaffPermissions = {
+  manage_students: true,
+  manage_groups: true,
+  manage_projects: true,
+  mark_attendance: true,
+  assign_tasks: true,
+  record_payments: true,
+  export_reports: true,
+  mentor_reviews: true,
+};
+
+export const DEFAULT_STAFF_PERMISSIONS: StaffPermissions = {
+  manage_students: true,
+  manage_groups: true,
+  manage_projects: true,
+  mark_attendance: true,
+  assign_tasks: true,
+  record_payments: false,
+  export_reports: true,
+  mentor_reviews: true,
+};
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -18,6 +51,7 @@ export interface UserProfile {
   avatar_url?: string;
   college_id?: string;
   is_active: boolean;
+  permissions?: StaffPermissions;
   created_at: string;
   updated_at: string;
 }
@@ -134,7 +168,24 @@ export interface GroupMember {
   student?: Student;
 }
 
-export type ProjectStatus = 'not_started' | 'planning' | 'in_progress' | 'under_review' | 'on_hold' | 'completed';
+export type ProjectStatus = 'planning' | 'design' | 'development' | 'testing' | 'completed' | 'not_started' | 'in_progress' | 'under_review' | 'on_hold';
+
+export interface ProjectLifecyclePhases {
+  planning: boolean;
+  design: boolean;
+  development: boolean;
+  testing: boolean;
+}
+
+export interface ProjectPresentation {
+  id: string;
+  round_number: number;
+  title: string;
+  date: string;
+  status: 'completed' | 'scheduled' | 'revision_required';
+  feedback?: string;
+  score?: number;
+}
 
 export interface Project {
   id: string;
@@ -156,6 +207,8 @@ export interface Project {
   progress_percentage: number;
   repository_url?: string;
   live_demo_url?: string;
+  presentations?: ProjectPresentation[];
+  lifecycle_phases?: ProjectLifecyclePhases;
   created_at: string;
   updated_at: string;
   // Relations
@@ -207,6 +260,7 @@ export interface Task {
   updated_at: string;
   assigned_student?: Student;
   project?: Project;
+  group?: Group;
 }
 
 export type WeeklyReviewStatus = 'draft' | 'submitted' | 'under_review' | 'approved' | 'revision_required';
@@ -389,6 +443,7 @@ export interface StaffMember {
   designation: string;
   department?: string;
   is_active: boolean;
+  permissions?: StaffPermissions;
   avatar_url?: string;
   created_at: string;
   updated_at: string;

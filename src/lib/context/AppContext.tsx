@@ -22,7 +22,9 @@ import {
   StudentPayment,
   StaffMember,
   PaymentMode,
-  PaymentStatus
+  PaymentStatus,
+  DEFAULT_ADMIN_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSIONS
 } from '../types';
 import {
   initialProfiles,
@@ -48,7 +50,8 @@ import {
   seedCloudDataIfEmpty,
   cloudUpsert,
   cloudDelete,
-  cloudInsertMany
+  cloudInsertMany,
+  generateUUID
 } from '../supabase/syncService';
 import { calculateComputedProgress } from '../utils/formatters';
 
@@ -121,7 +124,7 @@ interface AppContextType {
   deleteMilestone: (id: string) => void;
 
   // Task Actions
-  createTask: (task: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => void;
+  createTask: (task: Omit<Task, 'id' | 'created_at' | 'updated_at'> | Array<Omit<Task, 'id' | 'created_at' | 'updated_at'>>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
 
@@ -208,10 +211,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // 1. Admin login
     if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && pass === adminPass) {
       setIsAuthenticated(true);
-      setCurrentUser(initialProfiles[0]);
+      const adminUser: UserProfile = {
+        ...initialProfiles[0],
+        permissions: DEFAULT_ADMIN_PERMISSIONS
+      };
+      setCurrentUser(adminUser);
       if (typeof window !== 'undefined') {
         localStorage.setItem('cognilearn_auth', 'admin');
-        localStorage.setItem('cognilearn_auth_user', JSON.stringify(initialProfiles[0]));
+        localStorage.setItem('cognilearn_auth_user', JSON.stringify(adminUser));
       }
       return true;
     }
@@ -227,6 +234,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         role: 'staff',
         phone: staffMember?.phone || '+91 98470 55667',
         is_active: true,
+        permissions: staffMember?.permissions || DEFAULT_STAFF_PERMISSIONS,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -253,6 +261,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         phone: matchedStaff.phone,
         avatar_url: matchedStaff.avatar_url,
         is_active: true,
+        permissions: matchedStaff.permissions || (matchedStaff.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
         created_at: matchedStaff.created_at,
         updated_at: matchedStaff.updated_at
       };
@@ -330,8 +339,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { saveToStorage('cognilearn_payments', payments); }, [payments]);
   useEffect(() => { saveToStorage('cognilearn_staff', staffMembers); }, [staffMembers]);
 
+  // Track deleted entity IDs locally so sync never resurrects deleted records
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
+    const saved = loadFromStorage<string[]>('cognilearn_deleted_ids', []);
+    return new Set(saved);
+  });
+  const deletedIdsRef = useRef<Set<string>>(deletedIds);
+  deletedIdsRef.current = deletedIds;
+
+  const markDeleted = (id: string) => {
+    lastLocalEditTime.current = Date.now();
+    setDeletedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      deletedIdsRef.current = next;
+      saveToStorage('cognilearn_deleted_ids', Array.from(next));
+      return next;
+    });
+  };
+
   // Track user's latest local edit to prevent polling from wiping active data
   const lastLocalEditTime = useRef<number>(0);
+
+  // Safe merge helper that prioritizes local edits and compares updated_at timestamps
+  function mergeEntities<T extends { id: string; updated_at?: string }>(
+    local: T[],
+    cloud: T[],
+    deletedSet?: Set<string>
+  ): T[] {
+    if (!Array.isArray(local)) local = [];
+    if (!Array.isArray(cloud) || cloud.length === 0) {
+      return deletedSet ? local.filter(i => i && !deletedSet.has(i.id)) : local;
+    }
+
+    const mergedMap = new Map<string, T>();
+
+    // 1. Local records always populate first (user's immediate state is preserved)
+    for (const item of local) {
+      if (!item || !item.id) continue;
+      if (deletedSet && deletedSet.has(item.id)) continue;
+      mergedMap.set(item.id, item);
+    }
+
+    // 2. Incorporate cloud records safely
+    for (const cloudItem of cloud) {
+      if (!cloudItem || !cloudItem.id) continue;
+      if (deletedSet && deletedSet.has(cloudItem.id)) continue;
+
+      const localItem = mergedMap.get(cloudItem.id);
+      if (!localItem) {
+        // Cloud has an item local doesn't have yet -> add it
+        mergedMap.set(cloudItem.id, cloudItem);
+      } else {
+        // Both have it -> only replace local if cloud is strictly newer!
+        const localTime = localItem.updated_at ? new Date(localItem.updated_at).getTime() : 0;
+        const cloudTime = cloudItem.updated_at ? new Date(cloudItem.updated_at).getTime() : 0;
+        if (cloudTime > localTime) {
+          if ((localItem as any).permissions && !(cloudItem as any).permissions) {
+            (cloudItem as any).permissions = (localItem as any).permissions;
+          }
+          mergedMap.set(cloudItem.id, cloudItem);
+        }
+      }
+    }
+
+    return Array.from(mergedMap.values());
+  }
 
   // Cloud Database Live Synchronization (Supabase)
   useEffect(() => {
@@ -350,18 +423,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
 
         if (hasCloudRecords) {
-          // Cloud has existing data -> synchronize to state
-          if (cloud.colleges.length > 0) setColleges(cloud.colleges);
-          if (cloud.courses.length > 0) setCourses(cloud.courses);
-          if (cloud.students.length > 0) setStudents(cloud.students);
-          if (cloud.groups.length > 0) setGroups(cloud.groups);
-          if (cloud.projects.length > 0) setProjects(cloud.projects);
-          if (cloud.milestones.length > 0) setMilestones(cloud.milestones);
-          if (cloud.tasks.length > 0) setTasks(cloud.tasks);
-          if (cloud.weeklyReports.length > 0) setWeeklyReports(cloud.weeklyReports);
-          if (cloud.attendance.length > 0) setAttendance(cloud.attendance);
-          if (cloud.payments.length > 0) setPayments(cloud.payments);
-          if (cloud.staffMembers.length > 0) setStaffMembers(cloud.staffMembers);
+          // Merge safely with existing local state instead of wiping out localStorage
+          setColleges(prev => mergeEntities(prev, cloud.colleges, deletedIdsRef.current));
+          setCourses(prev => mergeEntities(prev, cloud.courses, deletedIdsRef.current));
+          setStudents(prev => mergeEntities(prev, cloud.students, deletedIdsRef.current));
+          setGroups(prev => mergeEntities(prev, cloud.groups, deletedIdsRef.current));
+          setProjects(prev => mergeEntities(prev, cloud.projects, deletedIdsRef.current));
+          setMilestones(prev => mergeEntities(prev, cloud.milestones, deletedIdsRef.current));
+          setTasks(prev => mergeEntities(prev, cloud.tasks, deletedIdsRef.current));
+          setWeeklyReports(prev => mergeEntities(prev, cloud.weeklyReports, deletedIdsRef.current));
+          setAttendance(prev => mergeEntities(prev, cloud.attendance, deletedIdsRef.current));
+          setPayments(prev => mergeEntities(prev, cloud.payments, deletedIdsRef.current));
+          setStaffMembers(prev => mergeEntities(prev, cloud.staffMembers, deletedIdsRef.current));
         } else {
           // Cloud is empty -> Seed existing local data to cloud so other users can see it immediately
           await seedCloudDataIfEmpty({
@@ -385,26 +458,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     initCloudSync();
 
-    // 15-second background polling without overwriting active user typing
+    // Background polling with safe merge that preserves active local additions and debounces during edits
     const pollInterval = setInterval(async () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      if (Date.now() - lastLocalEditTime.current < 8000) return; // Skip if user actively made edits in last 8s
+      if (Date.now() - lastLocalEditTime.current < 30000) return; // Skip if user actively made edits in last 30s
 
       const cloud = await fetchCloudData();
       if (!cloud || !isMounted) return;
 
       if (cloud.students.length > 0 || cloud.groups.length > 0 || cloud.colleges.length > 0) {
-        setColleges(prev => JSON.stringify(prev) !== JSON.stringify(cloud.colleges) ? cloud.colleges : prev);
-        setCourses(prev => JSON.stringify(prev) !== JSON.stringify(cloud.courses) ? cloud.courses : prev);
-        setStudents(prev => JSON.stringify(prev) !== JSON.stringify(cloud.students) ? cloud.students : prev);
-        setGroups(prev => JSON.stringify(prev) !== JSON.stringify(cloud.groups) ? cloud.groups : prev);
-        setProjects(prev => JSON.stringify(prev) !== JSON.stringify(cloud.projects) ? cloud.projects : prev);
-        setMilestones(prev => JSON.stringify(prev) !== JSON.stringify(cloud.milestones) ? cloud.milestones : prev);
-        setTasks(prev => JSON.stringify(prev) !== JSON.stringify(cloud.tasks) ? cloud.tasks : prev);
-        setWeeklyReports(prev => JSON.stringify(prev) !== JSON.stringify(cloud.weeklyReports) ? cloud.weeklyReports : prev);
-        setAttendance(prev => JSON.stringify(prev) !== JSON.stringify(cloud.attendance) ? cloud.attendance : prev);
-        setPayments(prev => JSON.stringify(prev) !== JSON.stringify(cloud.payments) ? cloud.payments : prev);
-        setStaffMembers(prev => JSON.stringify(prev) !== JSON.stringify(cloud.staffMembers) ? cloud.staffMembers : prev);
+        setColleges(prev => mergeEntities(prev, cloud.colleges, deletedIdsRef.current));
+        setCourses(prev => mergeEntities(prev, cloud.courses, deletedIdsRef.current));
+        setStudents(prev => mergeEntities(prev, cloud.students, deletedIdsRef.current));
+        setGroups(prev => mergeEntities(prev, cloud.groups, deletedIdsRef.current));
+        setProjects(prev => mergeEntities(prev, cloud.projects, deletedIdsRef.current));
+        setMilestones(prev => mergeEntities(prev, cloud.milestones, deletedIdsRef.current));
+        setTasks(prev => mergeEntities(prev, cloud.tasks, deletedIdsRef.current));
+        setWeeklyReports(prev => mergeEntities(prev, cloud.weeklyReports, deletedIdsRef.current));
+        setAttendance(prev => mergeEntities(prev, cloud.attendance, deletedIdsRef.current));
+        setPayments(prev => mergeEntities(prev, cloud.payments, deletedIdsRef.current));
+        setStaffMembers(prev => mergeEntities(prev, cloud.staffMembers, deletedIdsRef.current));
       }
     }, 15000);
 
@@ -413,31 +486,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clearInterval(pollInterval);
     };
   }, []);
-
-  // Auto-delete projects that have no students assigned
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setProjects(prevProjects => {
-      if (!Array.isArray(prevProjects)) return prevProjects;
-      const orphanProjects = prevProjects.filter(p => {
-        if (!p) return true;
-        const grp = groups.find(g => g && g.id === p.group_id);
-        if (!grp) return true; // Group does not exist
-        // Check if any active student is assigned to this group
-        const hasStudents = students.some(s => s && (s.group_id === grp.id || grp.member_ids?.includes(s.id)));
-        return !hasStudents; // If no students assigned, it is an orphan project
-      });
-
-      if (orphanProjects.length > 0) {
-        const orphanIds = new Set(orphanProjects.map(p => p.id));
-        setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
-        setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
-        setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
-        return prevProjects.filter(p => !orphanIds.has(p.id));
-      }
-      return prevProjects;
-    });
-  }, [groups, students]);
 
   // Sync relation helper
   const enrichedStudents = useMemo(() => {
@@ -467,34 +515,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return projs.map(p => {
       if (!p) return null;
       const group = grps.find(g => g && g.id === p.group_id);
-      if (!group) return null;
-
-      // Auto-exclude if no students are assigned to this project's group
-      const assignedStudents = studs.filter(s => s && (s.group_id === p.group_id || group.member_ids?.includes(s.id)));
-      if (assignedStudents.length === 0) return null;
-
       const mentor = mntrs.find(m => m && (m.id === p.mentor_id || m.id === group?.mentor_id));
       const pMilestones = ms.filter(m => m && m.project_id === p.id);
       const pTasks = tsks.filter(t => t && (t.project_id === p.id || (p.group_id && t.group_id === p.group_id)));
 
+      // Check if all 4 lifecycle phases are verified
+      const allPhasesDone = Boolean(
+        p.lifecycle_phases?.planning &&
+        p.lifecycle_phases?.design &&
+        p.lifecycle_phases?.development &&
+        p.lifecycle_phases?.testing
+      );
+
       // Dynamically calculate progress unless manual override is explicitly enabled
       let progress = p.progress_percentage || 0;
-      if (!p.manual_progress_override) {
-        progress = calculateComputedProgress(pMilestones, pTasks);
-      }
-
-      // Automatically sync project status based on progress
       let status = p.status;
-      if (progress === 100) {
+      let manualOverride = p.manual_progress_override;
+
+      // If status is completed or all 4 phases are verified, progress is always 100% and manual override is deactivated
+      if (status === 'completed' || allPhasesDone) {
+        progress = 100;
         status = 'completed';
-      } else if (progress > 0 && status === 'planning') {
-        status = 'in_progress';
+        manualOverride = false;
+      } else if (!manualOverride) {
+        progress = calculateComputedProgress(
+          pMilestones,
+          pTasks,
+          p.presentations,
+          p.lifecycle_phases,
+          p.status
+        );
+        if (progress === 100) {
+          status = 'completed';
+        }
       }
 
       return {
         ...p,
         progress_percentage: progress,
         status,
+        manual_progress_override: manualOverride,
         group,
         mentor,
         milestones: pMilestones,
@@ -525,14 +585,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const enrichedTasks = useMemo(() => {
     const tsks = Array.isArray(tasks) ? tasks : initialTasks;
     const studs = Array.isArray(students) ? students : initialStudents;
+    const grps = Array.isArray(groups) ? groups : initialGroups;
 
     return tsks.map(t => {
       if (!t) return null;
       const assigned_student = studs.find(s => s && s.id === t.assigned_student_id);
       const project = enrichedProjects.find(p => p && p.id === t.project_id);
-      return { ...t, assigned_student, project };
+      const group = grps.find(g => g && (g.id === t.group_id || g.id === project?.group_id));
+      return { ...t, assigned_student, project, group };
     }).filter(Boolean) as Task[];
-  }, [tasks, students, enrichedProjects]);
+  }, [tasks, students, enrichedProjects, groups]);
 
   const enrichedWeeklyReports = useMemo(() => {
     const rprts = Array.isArray(weeklyReports) ? weeklyReports : initialWeeklyReports;
@@ -746,7 +808,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Activity logger helper
   const logActivity = (action: string, entity_type: string, description: string, entity_id?: string) => {
     const newLog: ActivityLog = {
-      id: `act-${Date.now()}`,
+      id: generateUUID(),
       user_id: currentUser.id,
       user_name: `${currentUser.full_name} (${currentUser.role.toUpperCase()})`,
       action,
@@ -760,12 +822,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // College & Department Actions
   const addCollege = (name: string, code?: string): College => {
+    lastLocalEditTime.current = Date.now();
     const trimmed = name.trim();
     const existing = colleges.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing;
 
     const newCol: College = {
-      id: `col-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      id: generateUUID(),
       name: trimmed,
       code: code?.trim() || trimmed.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 8),
       created_at: new Date().toISOString()
@@ -777,18 +840,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteCollege = (id: string) => {
+    markDeleted(id);
     setColleges(prev => prev.filter(c => c.id !== id));
     cloudDelete('colleges', id);
     logActivity('COLLEGE_DELETED', 'college', `Removed college`, id);
   };
 
   const addCourse = (name: string, department?: string, college_id?: string): Course => {
+    lastLocalEditTime.current = Date.now();
     const trimmed = name.trim();
     const existing = courses.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing;
 
     const newCourse: Course = {
-      id: `crs-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      id: generateUUID(),
       college_id: college_id || '',
       name: trimmed,
       code: trimmed.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 8),
@@ -803,6 +868,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteCourse = (id: string) => {
+    markDeleted(id);
     setCourses(prev => prev.filter(c => c.id !== id));
     cloudDelete('courses', id);
     logActivity('COURSE_DELETED', 'course', `Removed department/course`, id);
@@ -812,7 +878,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addStudent = (data: Omit<Student, 'id' | 'created_at' | 'updated_at'>) => {
     lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
-    const newStudentId = `s-${Date.now()}`;
+    const newStudentId = generateUUID();
     const totalFee = data.total_fee || 5000;
     const paidAmount = data.paid_amount || 0;
     const balance = Math.max(0, totalFee - paidAmount);
@@ -845,7 +911,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Automatically create payment record for fee management
     const newPayment: StudentPayment = {
-      id: `pay-${Date.now()}`,
+      id: generateUUID(),
       student_id: newStudentId,
       group_id: data.group_id,
       total_fee: totalFee,
@@ -866,6 +932,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateStudent = (id: string, updates: Partial<Student>) => {
+    lastLocalEditTime.current = Date.now();
     const existing = students.find(s => s.id === id);
     const oldGroupId = existing?.group_id;
     const newGroupId = updates.group_id;
@@ -904,29 +971,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return g;
       }));
-
-      // Check if old group now has 0 students -> auto delete project
-      if (oldGroupId) {
-        const remainingInOld = students.filter(s => s.id !== id && s.group_id === oldGroupId).length;
-        if (remainingInOld === 0) {
-          const orphanProjs = projects.filter(p => p.group_id === oldGroupId);
-          const orphanIds = new Set(orphanProjs.map(p => p.id));
-          if (orphanIds.size > 0) {
-            setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
-            orphanIds.forEach(pId => cloudDelete('projects', pId));
-            setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
-            setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
-            setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
-            logActivity('PROJECT_AUTO_DELETED', 'project', `Auto-deleted project for group ${oldGroupId} because no students remain assigned`, oldGroupId);
-          }
-        }
-      }
     }
 
     logActivity('STUDENT_UPDATED', 'student', `Updated student profile information`, id);
   };
 
   const deleteStudent = (id: string) => {
+    markDeleted(id);
     const target = students.find(s => s.id === id);
     setStudents(prev => prev.filter(s => s.id !== id));
     setPayments(prev => prev.filter(p => p.student_id !== id));
@@ -955,7 +1006,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const createGroup = (data: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
     lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
-    const newGroupId = `g-${Date.now()}`;
+    const newGroupId = generateUUID();
 
     // Disallow students who already exist in any other group
     const existingGroupStudentIds = new Set<string>();
@@ -1006,8 +1057,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return p;
       }));
 
-      // Automatically initialize project for this group ONLY IF students are assigned
-      const newProjectId = `p-${Date.now()}`;
+      // Automatically initialize project for this group
+      const newProjectId = generateUUID();
       const newProject: Project = {
         id: newProjectId,
         group_id: newGroupId,
@@ -1045,7 +1096,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         'Final Presentation'
       ];
       const initialGroupMilestones: ProjectMilestone[] = defaultSteps.map((stepName, idx) => ({
-        id: `ms-${newProjectId}-${idx + 1}`,
+        id: generateUUID(),
         project_id: newProjectId,
         step_order: idx + 1,
         name: stepName,
@@ -1066,6 +1117,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateGroup = (id: string, updates: Partial<Group>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
 
     // Prevent adding students who already belong to another group
@@ -1111,26 +1163,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return s;
       }));
-
-      // AUTO DELETE PROJECT if no students remain in the group
-      if (sanitizedMemberIds.length === 0) {
-        const orphanProjects = projects.filter(p => p.group_id === id);
-        const orphanIds = new Set(orphanProjects.map(p => p.id));
-        if (orphanIds.size > 0) {
-          setProjects(prev => prev.filter(p => !orphanIds.has(p.id)));
-          orphanIds.forEach(pId => cloudDelete('projects', pId));
-          setMilestones(prev => prev.filter(m => !orphanIds.has(m.project_id)));
-          setTasks(prev => prev.filter(t => !orphanIds.has(t.project_id)));
-          setEvaluations(prev => prev.filter(e => !orphanIds.has(e.project_id)));
-          logActivity('PROJECT_AUTO_DELETED', 'project', `Auto-deleted project for group ${id} because all students were unassigned`, id);
-        }
-      }
     }
 
     logActivity('GROUP_UPDATED', 'group', `Updated details for group`, id);
   };
 
   const deleteGroup = (id: string) => {
+    markDeleted(id);
     const target = groups.find(g => g.id === id);
     setGroups(prev => prev.filter(g => g.id !== id));
     cloudDelete('groups', id);
@@ -1139,6 +1178,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const relatedProjects = projects.filter(p => p.group_id === id);
     const relatedProjectIds = new Set(relatedProjects.map(p => p.id));
     if (relatedProjectIds.size > 0) {
+      relatedProjectIds.forEach(pId => markDeleted(pId));
       setProjects(prev => prev.filter(p => !relatedProjectIds.has(p.id)));
       relatedProjectIds.forEach(pId => cloudDelete('projects', pId));
       setMilestones(prev => prev.filter(m => !relatedProjectIds.has(m.project_id)));
@@ -1169,6 +1209,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     receipt_no?: string;
     remarks?: string;
   }) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const receiptNo = data.receipt_no || `REC-${Date.now().toString().slice(-6)}`;
 
@@ -1181,7 +1222,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const newStatus: PaymentStatus = newBalance === 0 ? 'paid' : 'partial';
 
         const transaction = {
-          id: `tx-${Date.now()}`,
+          id: generateUUID(),
           payment_id: existing.id,
           amount: data.amount,
           payment_mode: data.payment_mode,
@@ -1209,7 +1250,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const balance = Math.max(0, data.total_fee - data.amount);
         const status: PaymentStatus = balance === 0 ? 'paid' : data.amount > 0 ? 'partial' : 'unpaid';
         const newRecord: StudentPayment = {
-          id: `pay-${Date.now()}`,
+          id: generateUUID(),
           student_id: data.student_id,
           group_id: data.group_id,
           total_fee: data.total_fee,
@@ -1249,6 +1290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updatePayment = (id: string, updates: Partial<StudentPayment>) => {
+    lastLocalEditTime.current = Date.now();
     setPayments(prev => prev.map(p => {
       if (p.id !== id) return p;
       const updated = { ...p, ...updates, updated_at: new Date().toISOString() };
@@ -1260,10 +1302,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Staff & Admin Actions
   const addStaffMember = (data: Omit<StaffMember, 'id' | 'created_at' | 'updated_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newStaff: StaffMember = {
       ...data,
-      id: `staff-${Date.now()}`,
+      id: generateUUID(),
+      permissions: data.permissions || (data.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
       created_at: now,
       updated_at: now
     };
@@ -1283,16 +1327,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateStaffMember = (id: string, updates: Partial<StaffMember>) => {
+    lastLocalEditTime.current = Date.now();
     setStaffMembers(prev => prev.map(s => {
       if (s.id !== id) return s;
       const updated = { ...s, ...updates, updated_at: new Date().toISOString() };
-      cloudUpsert('profiles', updated);
+      cloudUpsert('profiles', {
+        id: updated.id,
+        email: updated.email,
+        full_name: updated.full_name,
+        role: updated.role,
+        phone: updated.phone,
+        avatar_url: updated.avatar_url,
+        is_active: updated.is_active,
+        updated_at: updated.updated_at
+      });
       return updated;
     }));
     logActivity('STAFF_UPDATED', 'staff', `Updated staff permissions/profile`, id);
   };
 
   const deleteStaffMember = (id: string) => {
+    markDeleted(id);
     setStaffMembers(prev => prev.filter(s => s.id !== id));
     cloudDelete('profiles', id);
     logActivity('STAFF_REMOVED', 'staff', `Removed staff member`, id);
@@ -1300,13 +1355,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Project Actions
   const updateProject = (id: string, updates: Partial<Project>) => {
+    lastLocalEditTime.current = Date.now();
     setProjects(prev => prev.map(p => {
       if (p.id !== id) return p;
       const updated = { ...p, ...updates, updated_at: new Date().toISOString() };
-      if (!updated.manual_progress_override) {
+      const allPhasesDone = Boolean(
+        updated.lifecycle_phases?.planning &&
+        updated.lifecycle_phases?.design &&
+        updated.lifecycle_phases?.development &&
+        updated.lifecycle_phases?.testing
+      );
+
+      if (updated.status === 'completed' || allPhasesDone) {
+        updated.progress_percentage = 100;
+        updated.status = 'completed';
+        updated.manual_progress_override = false;
+      } else if (!updated.manual_progress_override) {
         const pMilestones = milestones.filter(m => m.project_id === id);
         const pTasks = tasks.filter(t => t.project_id === id);
-        updated.progress_percentage = calculateComputedProgress(pMilestones, pTasks);
+        updated.progress_percentage = calculateComputedProgress(
+          pMilestones,
+          pTasks,
+          updated.presentations,
+          updated.lifecycle_phases,
+          updated.status
+        );
+        if (updated.progress_percentage === 100) {
+          updated.status = 'completed';
+        }
       }
       cloudUpsert('projects', updated, ['group', 'mentor', 'milestones', 'tasks']);
       return updated;
@@ -1315,6 +1391,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteProject = (id: string) => {
+    markDeleted(id);
     const target = projects.find(p => p.id === id);
     setProjects(prev => prev.filter(p => p.id !== id));
     cloudDelete('projects', id);
@@ -1326,10 +1403,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Milestone Actions
   const addMilestone = (data: Omit<ProjectMilestone, 'id' | 'created_at' | 'updated_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newMilestone: ProjectMilestone = {
       ...data,
-      id: `ms-${Date.now()}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     };
@@ -1339,6 +1417,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateMilestone = (id: string, updates: Partial<ProjectMilestone>) => {
+    lastLocalEditTime.current = Date.now();
     setMilestones(prev => prev.map(m => {
       if (m.id !== id) return m;
       const updated = { ...m, ...updates, updated_at: new Date().toISOString() };
@@ -1349,25 +1428,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteMilestone = (id: string) => {
+    markDeleted(id);
     setMilestones(prev => prev.filter(m => m.id !== id));
     cloudDelete('project_milestones', id);
   };
 
   // Task Actions
-  const createTask = (data: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
+  const createTask = (data: Omit<Task, 'id' | 'created_at' | 'updated_at'> | Array<Omit<Task, 'id' | 'created_at' | 'updated_at'>>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
-    const newTask: Task = {
-      ...data,
-      id: `t-${Date.now()}`,
+    const items = Array.isArray(data) ? data : [data];
+    if (items.length === 0) return;
+
+    const newTasks: Task[] = items.map((item) => ({
+      ...item,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
-    };
-    setTasks(prev => [newTask, ...prev]);
-    cloudUpsert('tasks', newTask, ['assigned_student', 'project']);
-    logActivity('TASK_CREATED', 'task', `Assigned task: ${data.title}`, newTask.id);
+    }));
+
+    setTasks(prev => [...newTasks, ...prev]);
+    newTasks.forEach(task => {
+      cloudUpsert('tasks', task, ['assigned_student', 'project', 'group']);
+    });
+
+    const summary = newTasks.length === 1 
+      ? `Assigned task: ${newTasks[0].title}`
+      : `Broadcasted task to ${newTasks.length} groups: ${newTasks[0].title}`;
+    logActivity('TASK_CREATED', 'task', summary, newTasks[0].id);
   };
 
   const updateTask = (id: string, updates: Partial<Task>) => {
+    lastLocalEditTime.current = Date.now();
     setTasks(prev => prev.map(t => {
       if (t.id !== id) return t;
       const updated = { ...t, ...updates, updated_at: new Date().toISOString() };
@@ -1378,6 +1470,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteTask = (id: string) => {
+    markDeleted(id);
     setTasks(prev => prev.filter(t => t.id !== id));
     cloudDelete('tasks', id);
     logActivity('TASK_DELETED', 'task', `Removed task item`, id);
@@ -1385,10 +1478,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Weekly Report Actions (Immutable - Never Overwrites Old Weeks)
   const submitWeeklyReport = (data: Omit<WeeklyReport, 'id' | 'created_at' | 'updated_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newReport: WeeklyReport = {
       ...data,
-      id: `w-${Date.now()}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     };
@@ -1398,7 +1492,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Notify Admins & Mentors
     const newNotification: AppNotification = {
-      id: `notif-${Date.now()}`,
+      id: generateUUID(),
       user_id: '00000000-0000-0000-0000-000000000001',
       title: `Week ${data.week_number} Report Submitted`,
       message: `A new weekly progress submission is awaiting review.`,
@@ -1411,6 +1505,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const reviewWeeklyReport = (id: string, feedback: string, status: WeeklyReport['review_status']) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     setWeeklyReports(prev => prev.map(w => {
       if (w.id !== id) return w;
@@ -1430,10 +1525,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Attendance Actions
   const markAttendanceBatch = (records: Omit<AttendanceRecord, 'id' | 'created_at' | 'updated_at'>[]) => {
+    lastLocalEditTime.current = Date.now();
     const now = new Date().toISOString();
     const newRecords: AttendanceRecord[] = records.map(r => ({
       ...r,
-      id: `att-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     }));
@@ -1449,6 +1545,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateAttendance = (id: string, status: AttendanceRecord['status'], remarks?: string) => {
+    lastLocalEditTime.current = Date.now();
     setAttendance(prev => prev.map(a => {
       if (a.id !== id) return a;
       const updated = { ...a, status, remarks: remarks || a.remarks, updated_at: new Date().toISOString() };
@@ -1460,9 +1557,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Document Actions
   const uploadDocument = (data: Omit<ProjectDocument, 'id' | 'created_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const newDoc: ProjectDocument = {
       ...data,
-      id: `doc-${Date.now()}`,
+      id: generateUUID(),
       created_at: new Date().toISOString()
     };
     setDocuments(prev => [newDoc, ...prev]);
@@ -1470,15 +1568,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteDocument = (id: string) => {
+    lastLocalEditTime.current = Date.now();
     setDocuments(prev => prev.filter(d => d.id !== id));
     logActivity('DOCUMENT_DELETED', 'document', `Deleted document record`, id);
   };
 
   // Evaluation Actions
   const saveEvaluation = (data: Omit<Evaluation, 'id' | 'created_at'>) => {
+    lastLocalEditTime.current = Date.now();
     const newEval: Evaluation = {
       ...data,
-      id: `eval-${Date.now()}`,
+      id: generateUUID(),
       created_at: new Date().toISOString()
     };
     setEvaluations(prev => [newEval, ...prev]);

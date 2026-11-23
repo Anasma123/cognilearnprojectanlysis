@@ -34,10 +34,11 @@ const KANBAN_COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
 ];
 
 export default function TasksPage() {
-  const { tasks, projects, students, updateTask, deleteTask, currentUser } = useApp();
+  const { tasks, projects, groups, students, updateTask, deleteTask, currentUser } = useApp();
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('ALL');
   const [selectedProject, setSelectedProject] = useState('ALL');
   const [selectedPriority, setSelectedPriority] = useState('ALL');
   const [selectedAssignee, setSelectedAssignee] = useState('ALL');
@@ -63,13 +64,14 @@ export default function TasksPage() {
         t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.description || '').toLowerCase().includes(searchTerm.toLowerCase());
 
+      const matchGroup = selectedGroup === 'ALL' || t.group_id === selectedGroup;
       const matchProject = selectedProject === 'ALL' || t.project_id === selectedProject;
       const matchPriority = selectedPriority === 'ALL' || t.priority === selectedPriority;
       const matchAssignee = selectedAssignee === 'ALL' || t.assigned_student_id === selectedAssignee;
 
-      return matchSearch && matchProject && matchPriority && matchAssignee;
+      return matchSearch && matchGroup && matchProject && matchPriority && matchAssignee;
     });
-  }, [enrichedTasks, searchTerm, selectedProject, selectedPriority, selectedAssignee]);
+  }, [enrichedTasks, searchTerm, selectedGroup, selectedProject, selectedPriority, selectedAssignee]);
 
   const handleQuickStatusAdvance = (task: Task) => {
     const sequence: Record<TaskStatus, TaskStatus> = {
@@ -144,7 +146,7 @@ export default function TasksPage() {
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -154,6 +156,19 @@ export default function TasksPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none"
             />
+          </div>
+
+          <div>
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">All Groups</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -255,10 +270,18 @@ export default function TasksPage() {
                       )}
 
                       <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="font-medium truncate max-w-[100px]">
-                          {task.assigned_student?.full_name || 'Unassigned'}
-                        </span>
-                        <span className={`flex items-center gap-1 ${task.status === 'overdue' ? 'text-rose-600 font-bold' : ''}`}>
+                        <div className="truncate max-w-[125px]">
+                          {task.assigned_student ? (
+                            <span className="font-semibold text-slate-800 truncate block" title={task.assigned_student.full_name}>
+                              👤 {task.assigned_student.full_name}
+                            </span>
+                          ) : (
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold text-[10px] truncate" title={task.group?.name || 'Group Task'}>
+                              👥 {task.group?.name || 'Group Task'}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`flex items-center gap-1 shrink-0 ${task.status === 'overdue' ? 'text-rose-600 font-bold' : ''}`}>
                           <Calendar className="w-3 h-3" />
                           {formatDateIndian(task.due_date)}
                         </span>
@@ -318,10 +341,21 @@ export default function TasksPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-700">
-                        {task.project?.project_code || 'Project'}
+                        <div>
+                          <span className="font-bold text-slate-900 block">{task.group?.name || 'Group'}</span>
+                          <span className="text-[11px] text-slate-400 font-mono block">{task.project?.project_code || 'Project'}</span>
+                        </div>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {task.assigned_student?.full_name || 'Unassigned'}
+                      <td className="py-3 px-4">
+                        {task.assigned_student ? (
+                          <span className="font-semibold text-slate-800">
+                            👤 {task.assigned_student.full_name}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-[11px] border border-blue-200">
+                            👥 Group Task
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <span className={task.status === 'overdue' ? 'text-rose-600 font-bold' : 'text-slate-600'}>

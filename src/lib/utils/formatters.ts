@@ -45,31 +45,79 @@ export function formatFileSize(bytes?: number): string {
 }
 
 /**
- * Compute progress percentage automatically from milestones & tasks
+ * Compute progress percentage automatically from lifecycle phases, presentations, milestones & tasks
  */
 export function calculateComputedProgress(
   milestones: { status: string }[] = [],
-  tasks: { status: string }[] = []
+  tasks: { status: string }[] = [],
+  presentations: { status: string }[] = [],
+  lifecyclePhases?: { planning?: boolean; design?: boolean; development?: boolean; testing?: boolean },
+  lifecycleStatus?: string
 ): number {
-  if (milestones.length === 0 && tasks.length === 0) return 0;
-  
-  let milestoneScore = 0;
-  if (milestones.length > 0) {
-    const completedM = milestones.filter(m => m.status === 'completed').length;
-    milestoneScore = (completedM / milestones.length) * 100;
+  // 1. Calculate phase score from the 4 lifecycle phases (planning, design, development, testing)
+  // Each phase carries exactly 25% weight (1 = 25%, 2 = 50%, 3 = 75%, 4 = 100%)
+  const phases = lifecyclePhases || {};
+  const phaseFlags = [
+    Boolean(phases.planning),
+    Boolean(phases.design),
+    Boolean(phases.development),
+    Boolean(phases.testing)
+  ];
+  const completedPhasesCount = phaseFlags.filter(Boolean).length;
+  const allPhasesDone = completedPhasesCount === 4;
+
+  // If status is explicitly completed OR all 4 phases are verified, project progress is 100%
+  if (lifecycleStatus === 'completed' || allPhasesDone) {
+    return 100;
   }
 
-  let taskScore = 0;
-  if (tasks.length > 0) {
-    const completedT = tasks.filter(t => t.status === 'completed').length;
-    taskScore = (completedT / tasks.length) * 100;
+  const phaseScore = completedPhasesCount * 25;
+  const hasPresentations = Boolean(presentations && presentations.length > 0);
+
+  // If no presentations recorded yet, progress is strictly the 4 lifecycle phases (25% each)
+  if (!hasPresentations) {
+    if (phaseScore > 0) return phaseScore;
+
+    // Fallback baseline from lifecycle status string if no phases checked yet
+    switch (String(lifecycleStatus).toLowerCase()) {
+      case 'design': return 25;
+      case 'develop':
+      case 'development': return 50;
+      case 'test':
+      case 'testing': return 75;
+      case 'completed': return 100;
+      case 'planning':
+      default: return 0;
+    }
   }
 
-  // Weight: 60% milestones, 40% tasks if both exist
-  if (milestones.length > 0 && tasks.length > 0) {
-    return Math.round(milestoneScore * 0.6 + taskScore * 0.4);
+  // 2. Presentations score calculation
+  // Completed = 100%, Revision Required = 50%, Scheduled = 0%
+  let totalPresScore = 0;
+  presentations.forEach(p => {
+    if (p.status === 'completed') {
+      totalPresScore += 100;
+    } else if (p.status === 'revision_required') {
+      totalPresScore += 50;
+    } else {
+      totalPresScore += 0; // scheduled
+    }
+  });
+  const avgPresScore = Math.round(totalPresScore / presentations.length);
+
+  // If presentations exist:
+  // Completed presentation confirms readiness for current stage
+  if (avgPresScore === 100) {
+    if (phaseScore >= 75) return 100;
+    return Math.min(100, Math.max(phaseScore, Math.round(phaseScore * 0.75 + avgPresScore * 0.25)));
   }
-  return Math.round(milestones.length > 0 ? milestoneScore : taskScore);
+
+  if (phaseScore > 0) {
+    const combined = phaseScore * 0.75 + avgPresScore * 0.25;
+    return Math.min(100, Math.max(0, Math.round(combined)));
+  }
+
+  return avgPresScore;
 }
 
 /**
@@ -84,12 +132,19 @@ export function getStatusBadgeClass(status?: string): string {
     case 'active':
     case 'paid':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'design':
+      return 'bg-purple-50 text-purple-700 border-purple-200';
+    case 'develop':
+    case 'development':
     case 'in_progress':
     case 'under_review':
     case 'submitted':
     case 'late':
     case 'partial':
       return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'test':
+    case 'testing':
+      return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'planning':
     case 'todo':
     case 'draft':

@@ -113,3 +113,86 @@ export function exportTasksToExcel(tasks: Task[], filename = 'Cognilearn_Tasks_E
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Project Tasks');
   XLSX.writeFile(workbook, filename);
 }
+
+export interface AutomatedGroupExportRow {
+  group_code: string;
+  group_name: string;
+  project_title: string;
+  lifecycle_status: string;
+  progress_percentage: number;
+  presentations_summary: string;
+  milestones_summary: string;
+  tasks_summary: string;
+  attendance_rate: string;
+  fee_total: number;
+  fee_paid: number;
+  fee_balance: number;
+  health_status: string;
+  timeframe: string;
+}
+
+export interface AutomatedStudentExportRow {
+  student_reg_no: string;
+  full_name: string;
+  group_code: string;
+  group_name: string;
+  assigned_role: string;
+  department: string;
+  attendance_rate: string;
+  tasks_completed_count: number;
+  tasks_total_count: number;
+  fee_paid: number;
+  fee_balance: number;
+  payment_status: string;
+  performance_rating: string;
+  timeframe: string;
+}
+
+export function exportAutomatedGroupReportToExcel(rows: AutomatedGroupExportRow[], filename = 'Cognilearn_Group_Intelligence_Report.xlsx') {
+  const data = rows.map((r, idx) => ({
+    'Sl. No': idx + 1,
+    'Group Code': r.group_code,
+    'Group Name': r.group_name,
+    'Project Title': r.project_title,
+    'Lifecycle Status': r.lifecycle_status,
+    'Progress %': `${r.progress_percentage}%`,
+    'Presentations': r.presentations_summary,
+    'Milestones': r.milestones_summary,
+    'Tasks': r.tasks_summary,
+    'Attendance': r.attendance_rate,
+    'Total Fee (INR)': r.fee_total,
+    'Fee Paid (INR)': r.fee_paid,
+    'Fee Balance (INR)': r.fee_balance,
+    'Health / Status': r.health_status,
+    'Report Scope': r.timeframe
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Group Intelligence');
+  XLSX.writeFile(workbook, filename);
+}
+
+export function exportAutomatedStudentReportToExcel(rows: AutomatedStudentExportRow[], filename = 'Cognilearn_Student_Performance_Report.xlsx') {
+  const data = rows.map((r, idx) => ({
+    'Sl. No': idx + 1,
+    'Reg No': r.student_reg_no,
+    'Full Name': r.full_name,
+    'Group Code': r.group_code,
+    'Group Name': r.group_name,
+    'Role in Group': r.assigned_role,
+    'Department': r.department,
+    'Attendance Rate': r.attendance_rate,
+    'Tasks Completed': `${r.tasks_completed_count} of ${r.tasks_total_count}`,
+    'Fee Paid (INR)': r.fee_paid,
+    'Fee Balance (INR)': r.fee_balance,
+    'Payment Status': r.payment_status.toUpperCase(),
+    'Performance Standing': r.performance_rating,
+    'Report Scope': r.timeframe
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Performance');
+  XLSX.writeFile(workbook, filename);
+}

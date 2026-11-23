@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useApp } from '@/lib/context/AppContext';
-import { Project, ProjectStatus } from '@/lib/types';
-import { formatDateIndian } from '@/lib/utils/formatters';
+import { Project, ProjectStatus, ProjectPresentation, ProjectLifecyclePhases } from '@/lib/types';
+import { formatDateIndian, calculateComputedProgress } from '@/lib/utils/formatters';
 import { generateFinalProjectReportPdf } from '@/lib/utils/exportPdf';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -19,11 +19,13 @@ import {
   CheckCircle2,
   TrendingUp,
   Cpu,
-  Trash2
+  Trash2,
+  Plus,
+  Presentation
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, groups, milestones, evaluations, updateProject, deleteProject, currentUser } = useApp();
+  const { projects, groups, mentors, milestones, tasks, evaluations, updateProject, deleteProject, currentUser } = useApp();
 
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
@@ -31,32 +33,185 @@ export default function ProjectsPage() {
 
   // Form state for editing project
   const [editForm, setEditForm] = useState({
+    title: '',
+    category: 'Full-Stack Software System',
+    description: '',
+    technologies_input: '',
+    mentor_id: '',
+    expected_completion_date: '',
     status: 'in_progress' as ProjectStatus,
     manual_progress_override: false,
     progress_percentage: 0,
     repository_url: '',
     live_demo_url: '',
     problem_statement: '',
-    objectives: ''
+    objectives: '',
+    presentations: [] as ProjectPresentation[],
+    lifecycle_phases: {
+      planning: false,
+      design: false,
+      development: false,
+      testing: false
+    } as ProjectLifecyclePhases
   });
 
   const handleOpenEdit = (p: Project) => {
     setProjectToEdit(p);
+    const initialPhases: ProjectLifecyclePhases = p.lifecycle_phases || {
+      planning: p.status !== 'not_started',
+      design: ['design', 'development', 'testing', 'completed'].includes(p.status),
+      development: ['development', 'testing', 'completed'].includes(p.status),
+      testing: ['testing', 'completed'].includes(p.status)
+    };
+
+    const allPhasesDone = initialPhases.planning && initialPhases.design && initialPhases.development && initialPhases.testing;
+    const isCompleted = p.status === 'completed' || allPhasesDone;
+
     setEditForm({
-      status: p.status,
-      manual_progress_override: p.manual_progress_override,
-      progress_percentage: p.progress_percentage,
+      title: p.title || '',
+      category: p.category || 'Full-Stack Software System',
+      description: p.description || '',
+      technologies_input: Array.isArray(p.technologies) ? p.technologies.join(', ') : '',
+      mentor_id: p.mentor_id || p.mentor?.id || '',
+      expected_completion_date: p.expected_completion_date ? p.expected_completion_date.split('T')[0] : '',
+      status: isCompleted ? 'completed' : p.status,
+      // If completed or all 4 phases are done, disable manual override so it recalculates to 100%
+      manual_progress_override: isCompleted ? false : p.manual_progress_override,
+      progress_percentage: isCompleted ? 100 : p.progress_percentage,
       repository_url: p.repository_url || '',
       live_demo_url: p.live_demo_url || '',
       problem_statement: p.problem_statement || '',
-      objectives: p.objectives || ''
+      objectives: p.objectives || '',
+      presentations: Array.isArray(p.presentations) ? [...p.presentations] : [],
+      lifecycle_phases: initialPhases
     });
+  };
+
+  const handleToggleLifecyclePhase = (phaseKey: keyof ProjectLifecyclePhases) => {
+    const nextPhases: ProjectLifecyclePhases = {
+      ...editForm.lifecycle_phases,
+      [phaseKey]: !editForm.lifecycle_phases[phaseKey]
+    };
+
+    // Auto-update status suggestion based on phase progression
+    let newStatus = editForm.status;
+    const allDone = nextPhases.planning && nextPhases.design && nextPhases.development && nextPhases.testing;
+    if (allDone) {
+      newStatus = 'completed';
+    } else if (nextPhases.testing) {
+      newStatus = 'testing';
+    } else if (nextPhases.development) {
+      newStatus = 'development';
+    } else if (nextPhases.design) {
+      newStatus = 'design';
+    } else if (nextPhases.planning) {
+      newStatus = 'planning';
+    }
+
+    setEditForm({
+      ...editForm,
+      lifecycle_phases: nextPhases,
+      status: newStatus,
+      // Automatically disable manual override when all 4 are completed so it reflects 100%
+      manual_progress_override: allDone ? false : editForm.manual_progress_override,
+      progress_percentage: allDone ? 100 : editForm.progress_percentage
+    });
+  };
+
+  const handleAddPresentation = () => {
+    const currentList = editForm.presentations || [];
+    const nextRound = currentList.length + 1;
+    const newPres: ProjectPresentation = {
+      id: `pres_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      round_number: nextRound,
+      title: `Presentation ${nextRound}`,
+      date: new Date().toISOString().split('T')[0],
+      status: 'completed',
+      feedback: '',
+      score: undefined
+    };
+    setEditForm({
+      ...editForm,
+      presentations: [...currentList, newPres]
+    });
+  };
+
+  const handleAutoFillProjectDefaults = () => {
+    if (!projectToEdit) return;
+    const grp = groups.find(g => g.id === projectToEdit.group_id);
+    setEditForm(prev => ({
+      ...prev,
+      title: prev.title.trim() || `Academic Capstone Project - ${grp?.name || 'Cohort'}`,
+      category: prev.category.trim() || 'Full-Stack Software System',
+      description: prev.description.trim() || `Academic capstone project assigned to ${grp?.name || 'group'}.`,
+      technologies_input: prev.technologies_input.trim() || 'Next.js, PostgreSQL, Tailwind CSS',
+      expected_completion_date: prev.expected_completion_date || '2025-04-30',
+      mentor_id: prev.mentor_id || grp?.mentor_id || '',
+      problem_statement: prev.problem_statement.trim() || 'Design and deploy a scalable full-stack system architecture.',
+      objectives: prev.objectives.trim() || 'Deliver verified lifecycle phases, end-to-end features, and secure database integrations.'
+    }));
+  };
+
+  const handleUpdatePresentation = (index: number, updates: Partial<ProjectPresentation>) => {
+    const list = [...(editForm.presentations || [])];
+    list[index] = { ...list[index], ...updates };
+    setEditForm({ ...editForm, presentations: list });
+  };
+
+  const handleRemovePresentation = (index: number) => {
+    const list = (editForm.presentations || []).filter((_, idx) => idx !== index);
+    const renumbered = list.map((item, idx) => ({
+      ...item,
+      round_number: idx + 1,
+      title: item.title.startsWith('Presentation ') ? `Presentation ${idx + 1}` : item.title
+    }));
+    setEditForm({ ...editForm, presentations: renumbered });
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (projectToEdit) {
-      updateProject(projectToEdit.id, editForm);
+      const parsedTech = editForm.technologies_input
+        ? editForm.technologies_input.split(',').map(t => t.trim()).filter(Boolean)
+        : projectToEdit.technologies;
+
+      const allPhasesDone = Boolean(
+        editForm.lifecycle_phases?.planning &&
+        editForm.lifecycle_phases?.design &&
+        editForm.lifecycle_phases?.development &&
+        editForm.lifecycle_phases?.testing
+      );
+      const isCompleted = editForm.status === 'completed' || allPhasesDone;
+
+      const computed = isCompleted ? 100 : calculateComputedProgress(
+        milestones.filter(m => m.project_id === projectToEdit.id),
+        tasks.filter(t => t.project_id === projectToEdit.id),
+        editForm.presentations,
+        editForm.lifecycle_phases,
+        editForm.status
+      );
+
+      const overrideActive = isCompleted ? false : editForm.manual_progress_override;
+      const finalProgress = isCompleted ? 100 : (overrideActive ? editForm.progress_percentage : computed);
+      const finalStatus = isCompleted ? 'completed' : editForm.status;
+
+      updateProject(projectToEdit.id, {
+        title: editForm.title.trim() || projectToEdit.title,
+        category: editForm.category.trim() || projectToEdit.category,
+        description: editForm.description.trim() || projectToEdit.description,
+        technologies: parsedTech.length > 0 ? parsedTech : ['Next.js', 'PostgreSQL', 'Tailwind CSS'],
+        mentor_id: editForm.mentor_id || projectToEdit.mentor_id,
+        expected_completion_date: editForm.expected_completion_date || projectToEdit.expected_completion_date,
+        status: finalStatus,
+        manual_progress_override: overrideActive,
+        progress_percentage: finalProgress,
+        repository_url: editForm.repository_url,
+        live_demo_url: editForm.live_demo_url,
+        problem_statement: editForm.problem_statement,
+        objectives: editForm.objectives,
+        presentations: editForm.presentations,
+        lifecycle_phases: editForm.lifecycle_phases
+      });
       setProjectToEdit(null);
     }
   };
@@ -107,8 +262,47 @@ export default function ProjectsPage() {
                         {project.project_code}
                       </span>
                       <StatusBadge status={project.status} />
+                      {project.presentations && project.presentations.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <Presentation className="w-3 h-3" />
+                          {project.presentations.length} {project.presentations.length === 1 ? 'Presentation' : 'Presentations'}
+                        </span>
+                      )}
                       <span className="text-xs font-semibold text-slate-500">
                         Category: <strong className="text-slate-800">{project.category}</strong>
+                      </span>
+                    </div>
+
+                    {/* Lifecycle Phases Stepper Pills on Card */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px]">
+                      <span className="text-slate-400 font-semibold mr-0.5">Phases:</span>
+                      <span className={`px-2 py-0.5 rounded-md font-medium border transition-colors ${
+                        project.lifecycle_phases?.planning
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200/60'
+                      }`}>
+                        Planning {project.lifecycle_phases?.planning ? '✓' : ''}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md font-medium border transition-colors ${
+                        project.lifecycle_phases?.design
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200/60'
+                      }`}>
+                        Design {project.lifecycle_phases?.design ? '✓' : ''}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md font-medium border transition-colors ${
+                        project.lifecycle_phases?.development
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200/60'
+                      }`}>
+                        Develop {project.lifecycle_phases?.development ? '✓' : ''}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md font-medium border transition-colors ${
+                        project.lifecycle_phases?.testing
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200/60'
+                      }`}>
+                        Test {project.lifecycle_phases?.testing ? '✓' : ''}
                       </span>
                     </div>
 
@@ -164,7 +358,7 @@ export default function ProjectsPage() {
                           style={{ width: `${project.progress_percentage}%` }}
                         />
                       </div>
-                      {project.manual_progress_override && (
+                      {project.manual_progress_override && project.status !== 'completed' && project.progress_percentage < 100 && (
                         <span className="text-[10px] text-amber-600 font-semibold block mt-1">
                           (Manual Progress Override Active)
                         </span>
@@ -238,50 +432,358 @@ export default function ProjectsPage() {
           maxWidth="2xl"
         >
           <form onSubmit={handleSaveEdit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Lifecycle Status *
-                </label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ProjectStatus })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white font-medium"
-                >
-                  <option value="planning">Planning Phase</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="under_review">Under Review / Pre-Defense</option>
-                  <option value="completed">Completed & Evaluated</option>
-                  <option value="on_hold">On Hold</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Manual Progress Override (%)
-                </label>
+            {/* Core Project Details & Academic Metadata */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <FolderKanban className="w-3.5 h-3.5 text-blue-600" />
+                  Academic Project Details & Metadata
+                </h3>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    disabled={!editForm.manual_progress_override}
-                    value={editForm.progress_percentage}
-                    onChange={(e) => setEditForm({ ...editForm, progress_percentage: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100"
-                  />
-                  <label className="flex items-center gap-1.5 text-xs text-slate-600 whitespace-nowrap cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editForm.manual_progress_override}
-                      onChange={(e) => setEditForm({ ...editForm, manual_progress_override: e.target.checked })}
-                      className="rounded text-blue-600"
-                    />
-                    Enable
-                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAutoFillProjectDefaults}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold text-blue-700 hover:text-blue-800 bg-white hover:bg-blue-50 rounded-lg border border-blue-200 shadow-2xs transition-colors"
+                    title="Keeps whatever you already entered, and fills defaults only for empty fields"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    Auto-Fill Empty Fields
+                  </button>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Code: {projectToEdit.project_code}
+                  </span>
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Project Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. AI-Powered Healthcare Diagnostic System"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Category *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.category}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. Full-Stack Software System, AI / Machine Learning"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Technologies / Tech Stack (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.technologies_input}
+                    onChange={(e) => setEditForm({ ...editForm, technologies_input: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. Next.js, PostgreSQL, Tailwind CSS, Python"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Target Completion Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.expected_completion_date}
+                    onChange={(e) => setEditForm({ ...editForm, expected_completion_date: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Assigned Mentor
+                  </label>
+                  <select
+                    value={editForm.mentor_id}
+                    onChange={(e) => setEditForm({ ...editForm, mentor_id: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">-- Select Mentor --</option>
+                    {mentors.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} ({m.department || 'Staff Mentor'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Project Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-normal focus:ring-1 focus:ring-blue-500"
+                    placeholder="Brief description of the academic capstone project..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Lifecycle Phases (Planning, Design, Development, Testing) */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-blue-600" />
+                    Lifecycle Phases & Progress Verification
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Mark each phase as complete to dynamically calculate project progress percentage.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 self-start sm:self-auto">
+                  {[
+                    editForm.lifecycle_phases.planning,
+                    editForm.lifecycle_phases.design,
+                    editForm.lifecycle_phases.development,
+                    editForm.lifecycle_phases.testing
+                  ].filter(Boolean).length} / 4 Phases Done
+                </span>
+              </div>
+
+              {/* 4 Interactive Phase Checkbox Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                {/* 1. Planning */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleLifecyclePhase('planning')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    editForm.lifecycle_phases.planning
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs ring-1 ring-emerald-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Phase 1</span>
+                    <input
+                      type="checkbox"
+                      checked={editForm.lifecycle_phases.planning}
+                      readOnly
+                      className="rounded text-emerald-600 pointer-events-none"
+                    />
+                  </div>
+                  <div className="font-bold text-xs">Planning</div>
+                  <div className="text-[10px] opacity-75 truncate">Scope & SRS</div>
+                  <span className={`inline-block mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                    editForm.lifecycle_phases.planning ? 'bg-emerald-200/70 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {editForm.lifecycle_phases.planning ? '✓ Completed' : 'Pending'}
+                  </span>
+                </button>
+
+                {/* 2. Design */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleLifecyclePhase('design')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    editForm.lifecycle_phases.design
+                      ? 'bg-purple-50 border-purple-300 text-purple-900 shadow-xs ring-1 ring-purple-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Phase 2</span>
+                    <input
+                      type="checkbox"
+                      checked={editForm.lifecycle_phases.design}
+                      readOnly
+                      className="rounded text-purple-600 pointer-events-none"
+                    />
+                  </div>
+                  <div className="font-bold text-xs">Design</div>
+                  <div className="text-[10px] opacity-75 truncate">UI/UX & Schema</div>
+                  <span className={`inline-block mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                    editForm.lifecycle_phases.design ? 'bg-purple-200/70 text-purple-800' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {editForm.lifecycle_phases.design ? '✓ Completed' : 'Pending'}
+                  </span>
+                </button>
+
+                {/* 3. Develop */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleLifecyclePhase('development')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    editForm.lifecycle_phases.development
+                      ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-xs ring-1 ring-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Phase 3</span>
+                    <input
+                      type="checkbox"
+                      checked={editForm.lifecycle_phases.development}
+                      readOnly
+                      className="rounded text-blue-600 pointer-events-none"
+                    />
+                  </div>
+                  <div className="font-bold text-xs">Develop</div>
+                  <div className="text-[10px] opacity-75 truncate">Code & APIs</div>
+                  <span className={`inline-block mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                    editForm.lifecycle_phases.development ? 'bg-blue-200/70 text-blue-800' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {editForm.lifecycle_phases.development ? '✓ Completed' : 'Pending'}
+                  </span>
+                </button>
+
+                {/* 4. Test */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleLifecyclePhase('testing')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    editForm.lifecycle_phases.testing
+                      ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-xs ring-1 ring-amber-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Phase 4</span>
+                    <input
+                      type="checkbox"
+                      checked={editForm.lifecycle_phases.testing}
+                      readOnly
+                      className="rounded text-amber-600 pointer-events-none"
+                    />
+                  </div>
+                  <div className="font-bold text-xs">Test</div>
+                  <div className="text-[10px] opacity-75 truncate">QA & Bug Fixes</div>
+                  <span className={`inline-block mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                    editForm.lifecycle_phases.testing ? 'bg-amber-200/70 text-amber-800' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {editForm.lifecycle_phases.testing ? '✓ Completed' : 'Pending'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Status Select & Progress Input */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Active Lifecycle Status
+                  </label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => {
+                      const nextStatus = e.target.value as ProjectStatus;
+                      const isComp = nextStatus === 'completed';
+                      setEditForm({
+                        ...editForm,
+                        status: nextStatus,
+                        manual_progress_override: isComp ? false : editForm.manual_progress_override,
+                        progress_percentage: isComp ? 100 : editForm.progress_percentage
+                      });
+                    }}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium"
+                  >
+                    <option value="planning">Planning Phase</option>
+                    <option value="design">Design Phase</option>
+                    <option value="development">Development Phase</option>
+                    <option value="testing">Testing Phase</option>
+                    <option value="completed">Completed & Evaluated (100%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Project Progress (%)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      disabled={
+                        !editForm.manual_progress_override ||
+                        editForm.status === 'completed' ||
+                        (editForm.lifecycle_phases.planning &&
+                          editForm.lifecycle_phases.design &&
+                          editForm.lifecycle_phases.development &&
+                          editForm.lifecycle_phases.testing)
+                      }
+                      value={
+                        (editForm.status === 'completed' ||
+                          (editForm.lifecycle_phases.planning &&
+                            editForm.lifecycle_phases.design &&
+                            editForm.lifecycle_phases.development &&
+                            editForm.lifecycle_phases.testing))
+                          ? 100
+                          : (editForm.manual_progress_override
+                            ? editForm.progress_percentage
+                            : calculateComputedProgress(
+                                milestones.filter(m => m.project_id === projectToEdit.id),
+                                tasks.filter(t => t.project_id === projectToEdit.id),
+                                editForm.presentations,
+                                editForm.lifecycle_phases,
+                                editForm.status
+                              ))
+                      }
+                      onChange={(e) => setEditForm({ ...editForm, progress_percentage: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs disabled:bg-emerald-50 disabled:text-emerald-800 disabled:font-bold"
+                    />
+                    {!(
+                      editForm.status === 'completed' ||
+                      (editForm.lifecycle_phases.planning &&
+                        editForm.lifecycle_phases.design &&
+                        editForm.lifecycle_phases.development &&
+                        editForm.lifecycle_phases.testing)
+                    ) && (
+                      <label className="flex items-center gap-1 text-[11px] text-slate-600 whitespace-nowrap cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.manual_progress_override}
+                          onChange={(e) => setEditForm({ ...editForm, manual_progress_override: e.target.checked })}
+                          className="rounded text-blue-600"
+                        />
+                        Override
+                      </label>
+                    )}
+                  </div>
+                  {(editForm.status === 'completed' ||
+                    (editForm.lifecycle_phases.planning &&
+                      editForm.lifecycle_phases.design &&
+                      editForm.lifecycle_phases.development &&
+                      editForm.lifecycle_phases.testing)) ? (
+                    <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                      ✓ Completed projects and verified 4-phase lifecycles are officially locked at 100% velocity.
+                    </p>
+                  ) : !editForm.manual_progress_override ? (
+                    <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                      ✓ Auto-calculated from verified phases (25% each) & presentations.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                      Manual progress override enabled.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   GitHub Monorepo URL
@@ -331,6 +833,117 @@ export default function ProjectsPage() {
                 onChange={(e) => setEditForm({ ...editForm, objectives: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
               />
+            </div>
+
+            {/* Project Presentations Section */}
+            <div className="pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <Presentation className="w-4 h-4 text-blue-600" />
+                    Project Presentations
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">
+                      {editForm.presentations?.length || 0} Rounds
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Record each presentation milestone with evaluation date, status, score, and remarks.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddPresentation}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Presentation
+                </button>
+              </div>
+
+              {(!editForm.presentations || editForm.presentations.length === 0) ? (
+                <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 bg-slate-50/50">
+                  No presentations added yet. Click <strong>&quot;Add Presentation&quot;</strong> to record Presentation 1, Presentation 2, etc.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  {editForm.presentations.map((pres, idx) => (
+                    <div
+                      key={pres.id || idx}
+                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 transition-all hover:border-slate-300"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                            {pres.round_number || idx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={pres.title}
+                            onChange={(e) => handleUpdatePresentation(idx, { title: e.target.value })}
+                            className="font-bold text-xs text-slate-900 bg-transparent border-b border-dashed border-slate-300 focus:border-blue-500 px-1 py-0.5"
+                            placeholder={`Presentation ${idx + 1}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePresentation(idx)}
+                          className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                          title="Delete presentation"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Date</label>
+                          <input
+                            type="date"
+                            value={pres.date}
+                            onChange={(e) => handleUpdatePresentation(idx, { date: e.target.value })}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Status</label>
+                          <select
+                            value={pres.status}
+                            onChange={(e) => handleUpdatePresentation(idx, { status: e.target.value as any })}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+                          >
+                            <option value="completed">Completed</option>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="revision_required">Revision Required</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Score (optional)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={pres.score ?? ''}
+                            onChange={(e) => handleUpdatePresentation(idx, { score: e.target.value ? parseFloat(e.target.value) : undefined })}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+                            placeholder="e.g. 85"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Feedback / Remarks</label>
+                        <input
+                          type="text"
+                          value={pres.feedback || ''}
+                          onChange={(e) => handleUpdatePresentation(idx, { feedback: e.target.value })}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+                          placeholder="Feedback or mentor suggestions..."
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
