@@ -20,11 +20,12 @@ import {
   Building2,
   Calendar,
   History,
-  Printer
+  Printer,
+  Trash2
 } from 'lucide-react';
 
 export default function PaymentsPage() {
-  const { students, groups, payments, recordPayment, updatePayment, currentUser } = useApp();
+  const { students, groups, payments, recordPayment, updatePayment, deletePayment, clearAllPayments, currentUser } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all');
@@ -210,6 +211,21 @@ export default function PaymentsPage() {
             <FileSpreadsheet className="w-4 h-4" />
             Export Ledger (CSV)
           </button>
+
+          {currentUser.role === 'admin' && payments.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete all ${payments.length} payment records? This cannot be undone.`)) {
+                  clearAllPayments();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-colors cursor-pointer"
+              title="Delete all payment records"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All ({payments.length})
+            </button>
+          )}
 
           {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
             <button
@@ -427,6 +443,20 @@ export default function PaymentsPage() {
                               className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded font-semibold text-[11px] transition-colors"
                             >
                               Pay Due
+                            </button>
+                          )}
+
+                          {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete this payment record${p.receipt_no ? ` (${p.receipt_no})` : ''}?`)) {
+                                  deletePayment(p.id);
+                                }
+                              }}
+                              title="Delete Payment Record"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>

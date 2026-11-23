@@ -109,6 +109,8 @@ interface AppContextType {
     remarks?: string;
   }) => void;
   updatePayment: (id: string, updates: Partial<StudentPayment>) => void;
+  deletePayment: (id: string) => void;
+  clearAllPayments: () => void;
 
   // Staff Actions
   addStaffMember: (staff: Omit<StaffMember, 'id' | 'created_at' | 'updated_at'>) => void;
@@ -436,21 +438,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAttendance(prev => mergeEntities(prev, cloud.attendance, deletedIdsRef.current));
           setPayments(prev => mergeEntities(prev, cloud.payments, deletedIdsRef.current));
           setStaffMembers(prev => mergeEntities(prev, cloud.staffMembers, deletedIdsRef.current));
-        } else {
-          // Cloud is empty -> Seed existing local data to cloud so other users can see it immediately
-          await seedCloudDataIfEmpty({
-            colleges,
-            courses,
-            students,
-            groups,
-            projects,
-            milestones,
-            tasks,
-            weeklyReports,
-            attendance,
-            payments,
-            staffMembers
-          });
         }
       } catch (err) {
         console.warn('Cloud sync initialization notice:', err);
@@ -1332,6 +1319,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     logActivity('PAYMENT_UPDATED', 'payment', `Updated fee ledger record`, id);
   };
 
+  const deletePayment = (id: string) => {
+    lastLocalEditTime.current = Date.now();
+    const toDelete = payments.find(p => p.id === id);
+    setPayments(prev => prev.filter(p => p.id !== id));
+    markDeleted(id);
+    cloudDelete('student_payments', id);
+    if (toDelete) {
+      logActivity('PAYMENT_DELETED', 'payment', `Deleted fee ledger record (${toDelete.receipt_no || id})`, id);
+    }
+  };
+
+  const clearAllPayments = () => {
+    lastLocalEditTime.current = Date.now();
+    payments.forEach(p => {
+      markDeleted(p.id);
+      cloudDelete('student_payments', p.id);
+    });
+    setPayments([]);
+    logActivity('ALL_PAYMENTS_CLEARED', 'payment', 'Cleared all fee ledger records');
+  };
+
   // Staff & Admin Actions
   const addStaffMember = (data: Omit<StaffMember, 'id' | 'created_at' | 'updated_at'>) => {
     lastLocalEditTime.current = Date.now();
@@ -1701,6 +1709,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteGroup,
         recordPayment,
         updatePayment,
+        deletePayment,
+        clearAllPayments,
         addStaffMember,
         updateStaffMember,
         deleteStaffMember,
