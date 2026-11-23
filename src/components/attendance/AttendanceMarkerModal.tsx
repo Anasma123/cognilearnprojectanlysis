@@ -18,7 +18,7 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [sessionType, setSessionType] = useState<AttendanceSession>('daily');
+  const sessionType: AttendanceSession = 'daily';
 
   const [studentStates, setStudentStates] = useState<Record<string, { status: AttendanceStatus; remarks: string }>>({});
 
@@ -139,13 +139,13 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Daily & Meeting Attendance Marker"
+      title="Daily Attendance Marker"
       subtitle="Record student presence for all cohorts and individuals in one place"
       maxWidth="4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Date, Session & Filters Header */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+        {/* Date & Filters Header */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Attendance Date *
@@ -157,20 +157,6 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
               onChange={(e) => setSelectedDate(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Session Format *
-            </label>
-            <select
-              value={sessionType}
-              onChange={(e) => setSessionType(e.target.value as AttendanceSession)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-            >
-              <option value="daily">Daily Organization Lab Session</option>
-              <option value="project_meeting">Weekly Project Review Meeting</option>
-            </select>
           </div>
 
           <div>
