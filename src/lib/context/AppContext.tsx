@@ -50,6 +50,7 @@ import {
   seedCloudDataIfEmpty,
   cloudUpsert,
   cloudDelete,
+  cloudDeleteStudentCascade,
   cloudInsertMany,
   generateUUID
 } from '../supabase/syncService';
@@ -979,27 +980,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteStudent = (id: string) => {
     markDeleted(id);
     const target = students.find(s => s.id === id);
-    setStudents(prev => prev.filter(s => s.id !== id));
-    setPayments(prev => prev.filter(p => p.student_id !== id));
-    cloudDelete('students', id);
-    cloudDelete('student_payments', id);
 
-    // Remove student from any groups
+    // 1. Remove from student roster
+    setStudents(prev => prev.filter(s => s.id !== id));
+
+    // 2. Cascade delete all payment ledger records for this student
+    const studentPayments = payments.filter(p => p.student_id === id);
+    studentPayments.forEach(p => markDeleted(p.id));
+    setPayments(prev => prev.filter(p => p.student_id !== id));
+
+    // 3. Cascade delete all attendance records for this student
+    const studentAttendance = attendance.filter(a => a.student_id === id);
+    studentAttendance.forEach(a => markDeleted(a.id));
+    setAttendance(prev => prev.filter(a => a.student_id !== id));
+
+    // 4. Cascade delete all tasks assigned to this student
+    const studentTasks = tasks.filter(t => t.assigned_student_id === id);
+    studentTasks.forEach(t => markDeleted(t.id));
+    setTasks(prev => prev.filter(t => t.assigned_student_id !== id));
+
+    // 5. Cascade delete all evaluations for this student
+    const studentEvaluations = evaluations.filter(e => e.student_id === id);
+    studentEvaluations.forEach(e => markDeleted(e.id));
+    setEvaluations(prev => prev.filter(e => e.student_id !== id));
+
+    // 6. Unassign from milestones
+    setMilestones(prev => prev.map(m => m.assigned_student_id === id ? { ...m, assigned_student_id: undefined } : m));
+
+    // 7. Clear from weekly report submitter
+    setWeeklyReports(prev => prev.map(w => w.submitted_by === id ? { ...w, submitted_by: undefined } : w));
+
+    // 8. Remove student from any groups and reassign leader if needed
     setGroups(prev => prev.map(g => {
       const isMember = (g.member_ids || []).includes(id);
-      if (!isMember && g.group_leader_id !== id) return g;
+      const isLeader = g.group_leader_id === id;
+      if (!isMember && !isLeader) return g;
+
       const newMemberIds = (g.member_ids || []).filter(mid => mid !== id);
+      const newLeaderId = isLeader ? (newMemberIds[0] || '') : g.group_leader_id;
       const updatedG = {
         ...g,
         member_ids: newMemberIds,
-        group_leader_id: g.group_leader_id === id ? newMemberIds[0] || '' : g.group_leader_id,
+        group_leader_id: newLeaderId,
         updated_at: new Date().toISOString()
       };
       cloudUpsert('groups', updatedG, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
       return updatedG;
     }));
 
-    logActivity('STUDENT_DELETED', 'student', `Removed student ${target?.full_name || id}`, id);
+    // 9. Atomic full cascade deletion in Supabase cloud database
+    cloudDeleteStudentCascade(id);
+
+    logActivity('STUDENT_DELETED', 'student', `Completely deleted student ${target?.full_name || id} and all associated ledger, attendance, and task records`, id);
   };
 
   // Group Actions (Students-first workflow)

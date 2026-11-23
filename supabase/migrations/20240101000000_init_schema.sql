@@ -295,6 +295,24 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
     created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
 );
 
+-- 18. STUDENT PAYMENTS & FEE LEDGER (CASCADE ON DELETE STUDENT)
+CREATE TABLE IF NOT EXISTS public.student_payments (
+    id TEXT PRIMARY KEY,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    group_id UUID REFERENCES public.groups(id) ON DELETE SET NULL,
+    total_fee NUMERIC(10,2) DEFAULT 5000.00,
+    paid_amount NUMERIC(10,2) DEFAULT 0.00,
+    balance_amount NUMERIC(10,2) DEFAULT 5000.00,
+    status TEXT NOT NULL DEFAULT 'unpaid' CHECK (status IN ('paid', 'partial', 'unpaid', 'overdue')),
+    last_payment_date DATE,
+    payment_mode TEXT DEFAULT 'upi' CHECK (payment_mode IN ('upi', 'cash', 'bank_transfer', 'cheque')),
+    receipt_no TEXT,
+    remarks TEXT,
+    transactions JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+    updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
+);
+
 -- INDEXES FOR MAXIMUM QUERY PERFORMANCE
 CREATE INDEX IF NOT EXISTS idx_students_group ON public.students(group_id);
 CREATE INDEX IF NOT EXISTS idx_students_college ON public.students(college_id);

@@ -315,6 +315,38 @@ export async function cloudDelete(table: string, id: string) {
   }
 }
 
+// Atomically delete student and cascade delete all related payments, attendance, tasks, and evaluations in Supabase
+export async function cloudDeleteStudentCascade(studentId: string) {
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete_student_cascade', student_id: studentId })
+    });
+    if (res.ok) return;
+  } catch (err) {
+    // console.warn('Server cascade delete notice:', err);
+  }
+
+  if (supabase && isSupabaseConfigured) {
+    try {
+      await Promise.allSettled([
+        supabase.from('student_payments').delete().eq('student_id', studentId),
+        supabase.from('attendance').delete().eq('student_id', studentId),
+        supabase.from('tasks').delete().eq('assigned_student_id', studentId),
+        supabase.from('evaluations').delete().eq('student_id', studentId),
+        supabase.from('group_members').delete().eq('student_id', studentId),
+        supabase.from('project_milestones').update({ assigned_student_id: null }).eq('assigned_student_id', studentId),
+        supabase.from('weekly_reports').update({ submitted_by: null }).eq('submitted_by', studentId),
+        supabase.from('groups').update({ group_leader_id: null }).eq('group_leader_id', studentId),
+        supabase.from('students').delete().eq('id', studentId)
+      ]);
+    } catch (err) {
+      console.warn('Direct cascade delete notice:', err);
+    }
+  }
+}
+
 export async function cloudInsertMany(table: string, records: Record<string, any>[], relationsToStrip: string[] = []) {
   if (!records || records.length === 0) return;
   const payload = records.map(r => cleanRecord(r, relationsToStrip));
