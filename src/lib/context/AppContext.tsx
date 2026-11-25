@@ -654,13 +654,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         p.lifecycle_phases?.testing
       );
 
+      const hasOpenTasks = pTasks.some(t => t && t.status !== 'completed');
+
       // Dynamically calculate progress unless manual override is explicitly enabled
       let progress = p.progress_percentage || 0;
       let status = p.status;
       let manualOverride = p.manual_progress_override;
 
-      // If status is completed or all 4 phases are verified, progress is always 100% and manual override is deactivated
-      if (status === 'completed' || allPhasesDone) {
+      // Only force 100% if status is completed AND all tasks are actually completed
+      if ((status === 'completed' || allPhasesDone) && !hasOpenTasks) {
         progress = 100;
         status = 'completed';
         manualOverride = false;
@@ -670,10 +672,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           pTasks,
           p.presentations,
           p.lifecycle_phases,
-          p.status
+          status === 'completed' && hasOpenTasks ? 'in_progress' : p.status
         );
-        if (progress === 100) {
+        if (progress === 100 && !hasOpenTasks) {
           status = 'completed';
+        } else if (hasOpenTasks && status === 'completed') {
+          status = 'in_progress';
         }
       }
 
@@ -1604,22 +1608,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updated.lifecycle_phases?.testing
       );
 
-      if (updated.status === 'completed' || allPhasesDone) {
+      const pMilestones = milestones.filter(m => m.project_id === id);
+      const pTasks = tasks.filter(t => t.project_id === id || (updated.group_id && t.group_id === updated.group_id));
+      const hasOpenTasks = pTasks.some(t => t && t.status !== 'completed');
+
+      if ((updated.status === 'completed' || allPhasesDone) && !hasOpenTasks) {
         updated.progress_percentage = 100;
         updated.status = 'completed';
         updated.manual_progress_override = false;
       } else if (!updated.manual_progress_override) {
-        const pMilestones = milestones.filter(m => m.project_id === id);
-        const pTasks = tasks.filter(t => t.project_id === id || (updated.group_id && t.group_id === updated.group_id));
         updated.progress_percentage = calculateComputedProgress(
           pMilestones,
           pTasks,
           updated.presentations,
           updated.lifecycle_phases,
-          updated.status
+          updated.status === 'completed' && hasOpenTasks ? 'in_progress' : updated.status
         );
-        if (updated.progress_percentage === 100) {
+        if (updated.progress_percentage === 100 && !hasOpenTasks) {
           updated.status = 'completed';
+        } else if (hasOpenTasks && updated.status === 'completed') {
+          updated.status = 'in_progress';
         }
       }
       cloudUpsert('projects', updated, ['group', 'mentor', 'milestones', 'tasks']);

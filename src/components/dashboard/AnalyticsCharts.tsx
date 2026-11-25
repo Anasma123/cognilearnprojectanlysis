@@ -27,10 +27,11 @@ export function AnalyticsCharts() {
         const proj = projects.find(p => p && p.group_id === g.id) || g.project;
         const gMilestones = (milestones || []).filter(m => m && proj && m.project_id === proj.id);
         const gTasks = (tasks || []).filter(t => t && (t.group_id === g.id || (proj && t.project_id === proj.id)));
+        const hasOpenTasks = gTasks.some(t => t && t.status !== 'completed');
 
         // Live calculation incorporating task priorities
         let progress: number;
-        if (proj?.manual_progress_override === true && proj.progress_percentage !== undefined) {
+        if (proj?.manual_progress_override === true && proj.progress_percentage !== undefined && !hasOpenTasks) {
           progress = proj.progress_percentage;
         } else {
           progress = calculateComputedProgress(
@@ -38,7 +39,7 @@ export function AnalyticsCharts() {
             gTasks,
             proj?.presentations,
             proj?.lifecycle_phases,
-            proj?.status || 'in_progress'
+            (proj?.status === 'completed' && hasOpenTasks) ? 'in_progress' : (proj?.status || 'in_progress')
           );
         }
 
@@ -70,15 +71,16 @@ export function AnalyticsCharts() {
       const grp = (groups || []).find(g => g && g.id === p.group_id);
       const pMilestones = (milestones || []).filter(m => m && m.project_id === p.id);
       const pTasks = (tasks || []).filter(t => t && (t.project_id === p.id || (p.group_id && t.group_id === p.group_id)));
+      const hasOpenTasks = pTasks.some(t => t && t.status !== 'completed');
 
-      let progress = (p.manual_progress_override === true && p.progress_percentage !== undefined)
+      let progress = (p.manual_progress_override === true && p.progress_percentage !== undefined && !hasOpenTasks)
         ? p.progress_percentage
         : calculateComputedProgress(
             pMilestones,
             pTasks,
             p.presentations,
             p.lifecycle_phases,
-            p.status || 'in_progress'
+            (p.status === 'completed' && hasOpenTasks) ? 'in_progress' : (p.status || 'in_progress')
           );
 
       const completedTasksCount = pTasks.filter(t => t.status === 'completed').length;

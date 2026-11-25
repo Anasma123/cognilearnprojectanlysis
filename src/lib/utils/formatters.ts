@@ -56,8 +56,13 @@ export function calculateComputedProgress(
 ): number {
   const normStatus = String(lifecycleStatus || '').toLowerCase();
 
-  // 1. Explicit project status completion
-  if (normStatus === 'completed') {
+  // 1. Explicit project status completion:
+  // Only 100% if explicitly completed AND there are no open tasks
+  const totalTasks = Array.isArray(tasks) ? tasks.length : 0;
+  const openTasks = totalTasks > 0 ? tasks.filter(t => t && t.status !== 'completed') : [];
+  const hasOpenTasks = openTasks.length > 0;
+
+  if (normStatus === 'completed' && !hasOpenTasks) {
     return 100;
   }
 
@@ -70,10 +75,7 @@ export function calculateComputedProgress(
     Boolean(phases.testing)
   ];
   const completedPhasesCount = phaseFlags.filter(Boolean).length;
-  if (completedPhasesCount === 4) {
-    return 100;
-  }
-  const phaseScore = completedPhasesCount * 25; // 0, 25, 50, 75
+  const phaseScore = completedPhasesCount * 25; // 0, 25, 50, 75, 100
 
   // 3. Milestones Calculation (Completed = 100%, In Progress = 50%)
   const totalMilestones = Array.isArray(milestones) ? milestones.length : 0;
@@ -86,7 +88,66 @@ export function calculateComputedProgress(
     milestoneScore = Math.min(100, Math.round(((completedM + inProgressM * 0.5) / totalMilestones) * 100));
   }
 
-  // 4. Presentations Score (Completed = 100%, Revision Required = 50%)
+  // 4. Tasks Calculation with Priority Weighting
+  // Priority weights:
+  // - Critical: 4 points
+  // - High: 3 points
+  // - Medium: 2 points
+  // - Low: 1 point
+  let taskScore = 0;
+  let hasTasks = false;
+  let totalTaskWeight = 0;
+  let earnedTaskWeight = 0;
+  let priorityDrag = 0;
+
+  if (totalTasks > 0) {
+    hasTasks = true;
+
+    tasks.forEach(t => {
+      if (!t) return;
+      const normPriority = String(t.priority || 'medium').toLowerCase();
+      let weight = 2;
+      let dragMultiplier = 1.0;
+
+      if (normPriority === 'critical') {
+        weight = 4;
+        dragMultiplier = 2.5; // Critical pending tasks create high drag
+      } else if (normPriority === 'high') {
+        weight = 3;
+        dragMultiplier = 1.8; // High pending tasks are problematic for working
+      } else if (normPriority === 'medium') {
+        weight = 2;
+        dragMultiplier = 1.0;
+      } else if (normPriority === 'low') {
+        weight = 1;
+        dragMultiplier = 0.4; // Low pending tasks have minimal drag
+      }
+
+      totalTaskWeight += weight;
+
+      const normTaskStatus = String(t.status || '').toLowerCase();
+      let factor = 0;
+      if (normTaskStatus === 'completed') {
+        factor = 1.0;
+      } else if (normTaskStatus === 'under_review') {
+        factor = 0.75;
+        priorityDrag += (weight * 0.25) * dragMultiplier;
+      } else if (normTaskStatus === 'in_progress') {
+        factor = 0.50;
+        priorityDrag += (weight * 0.50) * dragMultiplier;
+      } else {
+        // todo / blocked / overdue
+        factor = 0.0;
+        priorityDrag += (weight * 1.0) * dragMultiplier;
+      }
+
+      earnedTaskWeight += weight * factor;
+    });
+
+    taskScore = totalTaskWeight > 0 ? (earnedTaskWeight / totalTaskWeight) * 100 : 0;
+  }
+
+  // 5. Presentations Score (Completed = 100%, Revision Required = 50%)
   const hasPresentations = Array.isArray(presentations) && presentations.length > 0;
   let presScore = 0;
   if (hasPresentations) {
@@ -98,95 +159,77 @@ export function calculateComputedProgress(
     presScore = Math.round(totalPresScore / presentations.length);
   }
 
-  // 5. Baseline Foundation Progress
-  let baseProgress = 0;
-  if (hasMilestones && phaseScore > 0) {
-    baseProgress = milestoneScore * 0.70 + phaseScore * 0.30;
-  } else if (hasMilestones) {
-    baseProgress = milestoneScore;
-  } else if (phaseScore > 0) {
-    baseProgress = phaseScore;
+  // 6. Objective Blended Progress Calculation
+  let computed = 0;
+
+  if (hasMilestones && hasTasks) {
+    // Both milestones and tasks are active
+    if (phaseScore > 0 && hasPresentations) {
+      computed = milestoneScore * 0.45 + taskScore * 0.35 + phaseScore * 0.12 + presScore * 0.08;
+    } else if (phaseScore > 0) {
+      computed = milestoneScore * 0.50 + taskScore * 0.38 + phaseScore * 0.12;
+    } else if (hasPresentations) {
+      computed = milestoneScore * 0.50 + taskScore * 0.40 + presScore * 0.10;
+    } else {
+      computed = milestoneScore * 0.55 + taskScore * 0.45;
+    }
+  } else if (hasMilestones && !hasTasks) {
+    if (phaseScore > 0) {
+      computed = milestoneScore * 0.75 + phaseScore * 0.25;
+    } else if (hasPresentations) {
+      computed = milestoneScore * 0.85 + presScore * 0.15;
+    } else {
+      computed = milestoneScore;
+    }
+  } else if (!hasMilestones && hasTasks) {
+    if (phaseScore > 0) {
+      computed = taskScore * 0.75 + phaseScore * 0.25;
+    } else if (hasPresentations) {
+      computed = taskScore * 0.85 + presScore * 0.15;
+    } else {
+      computed = taskScore;
+    }
   } else {
-    switch (normStatus) {
-      case 'design': baseProgress = 25; break;
-      case 'develop':
-      case 'development':
-      case 'in_progress': baseProgress = 50; break;
-      case 'test':
-      case 'testing': baseProgress = 75; break;
-      default: baseProgress = 20; break;
+    // Neither milestones nor tasks recorded yet
+    if (phaseScore > 0 && hasPresentations) {
+      computed = phaseScore * 0.75 + presScore * 0.25;
+    } else if (phaseScore > 0) {
+      computed = phaseScore;
+    } else if (hasPresentations) {
+      computed = presScore;
+    } else {
+      switch (normStatus) {
+        case 'design': computed = 25; break;
+        case 'develop': case 'development': case 'in_progress': computed = 50; break;
+        case 'test': case 'testing': computed = 75; break;
+        default: computed = 15; break;
+      }
     }
   }
 
-  // 6. Tasks Modulation based on Priority:
-  // Priority dictates the magnitude of impact on the overall progress:
-  // - Critical: 4x impact (pending drag -18%, completed gain +25%)
-  // - High: 3x impact (problematic for working: pending drag -12%, completed gain +18%)
-  // - Medium: 2x impact (standard task: pending drag -6%, completed gain +10%)
-  // - Low: 1x impact (minor item: pending drag -2.5%, completed gain +5%)
-  const totalTasks = Array.isArray(tasks) ? tasks.length : 0;
-  let taskEarnedDelta = 0;
-  let taskPendingDrag = 0;
-  let allTasksDone = totalTasks > 0;
-
-  if (totalTasks > 0) {
-    tasks.forEach(t => {
-      if (!t) return;
-      const normPriority = String(t.priority || 'medium').toLowerCase();
-      let earnVal = 10;
-      let dragVal = 6;
-
-      if (normPriority === 'critical') {
-        earnVal = 25;
-        dragVal = 18;
-      } else if (normPriority === 'high') {
-        earnVal = 18;
-        dragVal = 12;
-      } else if (normPriority === 'medium') {
-        earnVal = 10;
-        dragVal = 6;
-      } else if (normPriority === 'low') {
-        earnVal = 5;
-        dragVal = 2.5;
-      }
-
-      const normTaskStatus = String(t.status || '').toLowerCase();
-      if (normTaskStatus === 'completed') {
-        taskEarnedDelta += earnVal;
-      } else if (normTaskStatus === 'under_review') {
-        taskEarnedDelta += earnVal * 0.75;
-        taskPendingDrag += dragVal * 0.25;
-        allTasksDone = false;
-      } else if (normTaskStatus === 'in_progress') {
-        taskEarnedDelta += earnVal * 0.50;
-        taskPendingDrag += dragVal * 0.50;
-        allTasksDone = false;
-      } else {
-        // todo / blocked / overdue
-        taskPendingDrag += dragVal;
-        allTasksDone = false;
-      }
-    });
+  // 7. Apply Priority Drag Penalty for Problematic Pending Tasks
+  // High and Critical tasks pending have a significant negative impact
+  if (hasTasks && priorityDrag > 0) {
+    const dragPercent = Math.min(25, priorityDrag * 2.5);
+    computed = Math.max(0, computed - dragPercent);
   }
 
-  // 7. Calculate Final Progress:
-  let calculated = baseProgress;
-  if (totalTasks > 0) {
-    calculated = baseProgress + taskEarnedDelta - taskPendingDrag;
+  // 8. STRICT CAP: If there are ANY open/in-progress tasks, progress CANNOT be 100%
+  if (hasOpenTasks) {
+    computed = Math.min(95, computed);
   }
 
   // If all milestones and tasks are 100% completed
   if (
     (!hasMilestones || milestoneScore === 100) &&
-    (!totalTasks || allTasksDone) &&
-    (hasMilestones || totalTasks > 0 || phaseScore === 100)
+    (!hasTasks || (!hasOpenTasks && taskScore === 100)) &&
+    (!hasPresentations || presScore === 100) &&
+    (hasMilestones || hasTasks || phaseScore === 100)
   ) {
-    if (calculated >= 95 || (!hasMilestones && allTasksDone && totalTasks >= 2)) {
-      return 100;
-    }
+    return 100;
   }
 
-  return Math.min(100, Math.max(0, Math.round(calculated)));
+  return Math.min(100, Math.max(0, Math.round(computed)));
 }
 
 /**
