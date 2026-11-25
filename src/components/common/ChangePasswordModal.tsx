@@ -25,7 +25,7 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -47,22 +47,27 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
 
     setLoading(true);
 
-    const targetAccount = currentUser.role || currentUser.email || 'admin';
-    const result = changePassword(currentPassword, newPassword, targetAccount);
+    try {
+      const targetAccount = currentUser.email || currentUser.full_name || currentUser.role || 'staff';
+      const result = await changePassword(currentPassword, newPassword, targetAccount);
 
-    setLoading(false);
+      setLoading(false);
 
-    if (result.success) {
-      setSuccess(result.message);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        setSuccess('');
-        onClose();
-      }, 1500);
-    } else {
-      setError(result.message);
+      if (result.success) {
+        setSuccess(result.message);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => {
+          setSuccess('');
+          onClose();
+        }, 1500);
+      } else {
+        setError(result.message);
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError(err?.message || 'Failed to update password');
     }
   };
 

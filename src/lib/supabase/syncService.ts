@@ -386,6 +386,30 @@ export async function cloudUpsert(table: string, data: Record<string, any>, rela
   }
 }
 
+export async function cloudUpdate(table: string, id: string, data: Record<string, any>, relationsToStrip: string[] = []) {
+  const payload = cleanRecord(table, data, relationsToStrip);
+
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', table, id, record: payload })
+    });
+    if (res.ok) return;
+  } catch (err) {
+    // Fallback
+  }
+
+  // Direct Supabase fallback
+  if (supabase && isSupabaseConfigured) {
+    try {
+      await supabase.from(table).update(payload).eq('id', id);
+    } catch (err) {
+      console.warn(`Direct update notice on ${table}:`, err);
+    }
+  }
+}
+
 export async function cloudDelete(table: string, id: string) {
   try {
     const res = await fetch('/api/sync', {

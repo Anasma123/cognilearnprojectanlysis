@@ -164,6 +164,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'Student and all associated records deleted' });
     }
 
+    if (action === 'update' && table && record) {
+      const targetId = id || record.id || body.id;
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'Target id required for update' }, { status: 400 });
+      }
+      const { data, error } = await client.from(table).update(record).eq('id', targetId);
+      if (error) {
+        console.warn(`Sync update error on ${table}:`, error);
+        throw error;
+      }
+      return NextResponse.json({ success: true, data });
+    }
+
     if (action === 'upsert' && table && record) {
       const { data, error } = await client.from(table).upsert(record);
       if (error) {
