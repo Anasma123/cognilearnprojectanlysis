@@ -36,15 +36,15 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
     if (taskToEdit) {
       setTargetMode('single');
       setFormData({
-        title: taskToEdit.title,
+        title: taskToEdit.title || '',
         description: taskToEdit.description || '',
         project_id: taskToEdit.project_id || '',
         group_id: taskToEdit.group_id || '',
         assigned_student_id: taskToEdit.assigned_student_id || '',
-        assigned_date: taskToEdit.assigned_date,
-        due_date: taskToEdit.due_date,
-        priority: taskToEdit.priority,
-        status: taskToEdit.status,
+        assigned_date: taskToEdit.assigned_date || new Date().toISOString().split('T')[0],
+        due_date: taskToEdit.due_date || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+        priority: taskToEdit.priority || 'medium',
+        status: taskToEdit.status || 'todo',
         completion_notes: taskToEdit.completion_notes || ''
       });
     } else {
@@ -65,7 +65,7 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
         completion_notes: ''
       });
     }
-  }, [taskToEdit, isOpen, groups, projects]);
+  }, [taskToEdit, isOpen]);
 
   // Students belonging to the currently selected group
   const selectedGroup = groups.find(g => g.id === formData.group_id);
@@ -195,7 +195,7 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
             type="text"
             required
             value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
             placeholder="e.g. Submit Software Requirement Specification (SRS) Document"
           />
@@ -209,7 +209,7 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
           <textarea
             rows={3}
             value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
             placeholder="Provide specific deliverables, acceptance criteria, or guidelines..."
           />
@@ -224,24 +224,34 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
               </label>
               <select
                 value={formData.group_id}
+                required
                 onChange={(e) => {
                   const newGroupId = e.target.value;
                   const prj = projects.find(p => p.group_id === newGroupId);
-                  setFormData({
-                    ...formData,
+                  setFormData(prev => ({
+                    ...prev,
                     group_id: newGroupId,
-                    project_id: prj?.id || formData.project_id,
+                    project_id: prj?.id || prev.project_id,
                     assigned_student_id: '' // Reset student selection when group changes
-                  });
+                  }));
                 }}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none bg-white font-medium"
               >
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} {g.group_code ? `(${g.group_code})` : ''}
-                  </option>
-                ))}
+                {groups.length === 0 ? (
+                  <option value="">-- No Groups Available --</option>
+                ) : (
+                  groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} {g.group_code ? `(${g.group_code})` : ''}
+                    </option>
+                  ))
+                )}
               </select>
+              {groups.length === 0 && (
+                <p className="text-[11px] text-amber-600 mt-1">
+                  ⚠️ No project groups available. Please ask an Admin to assign a group to your account.
+                </p>
+              )}
             </div>
 
             <div>
@@ -255,7 +265,7 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
               </div>
               <select
                 value={formData.assigned_student_id}
-                onChange={(e) => setFormData({ ...formData, assigned_student_id: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, assigned_student_id: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none bg-white"
               >
                 <option value="">👥 Entire Group Task (No Specific Student)</option>

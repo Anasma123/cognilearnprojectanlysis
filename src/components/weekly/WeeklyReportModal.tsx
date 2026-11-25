@@ -199,7 +199,8 @@ export function WeeklyReportModal({ isOpen, onClose }: WeeklyReportModalProps) {
         populateFromGroup(initialGroupId);
       }
     }
-  }, [isOpen, populateFromGroup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleGroupChange = (newGroupId: string) => {
     populateFromGroup(newGroupId);

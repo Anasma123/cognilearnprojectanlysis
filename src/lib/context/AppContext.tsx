@@ -482,17 +482,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
+  function hasChanged<T extends { id: string; updated_at?: string }>(current: T[], incoming?: T[]): boolean {
+    if (!incoming) return false;
+    if (current.length !== incoming.length) return true;
+    for (let i = 0; i < current.length; i++) {
+      if (current[i]?.id !== incoming[i]?.id || current[i]?.updated_at !== incoming[i]?.updated_at) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const applyCloudSnapshot = (cloud: CloudDatabaseSnapshot) => {
-    if (cloud.colleges) setColleges(cloud.colleges);
-    if (cloud.courses) setCourses(cloud.courses);
-    if (cloud.students) setStudents(cloud.students);
-    if (cloud.groups) setGroups(cloud.groups);
-    if (cloud.projects) setProjects(cloud.projects);
-    if (cloud.milestones) setMilestones(cloud.milestones);
-    if (cloud.tasks) setTasks(cloud.tasks);
-    if (cloud.weeklyReports) setWeeklyReports(cloud.weeklyReports);
-    if (cloud.attendance) setAttendance(cloud.attendance);
-    if (cloud.payments) setPayments(cloud.payments);
+    if (cloud.colleges && hasChanged(colleges, cloud.colleges)) setColleges(cloud.colleges);
+    if (cloud.courses && hasChanged(courses, cloud.courses)) setCourses(cloud.courses);
+    if (cloud.students && hasChanged(students, cloud.students)) setStudents(cloud.students);
+    if (cloud.groups && hasChanged(groups, cloud.groups)) setGroups(cloud.groups);
+    if (cloud.projects && hasChanged(projects, cloud.projects)) setProjects(cloud.projects);
+    if (cloud.milestones && hasChanged(milestones, cloud.milestones)) setMilestones(cloud.milestones);
+    if (cloud.tasks && hasChanged(tasks, cloud.tasks)) setTasks(cloud.tasks);
+    if (cloud.weeklyReports && hasChanged(weeklyReports, cloud.weeklyReports)) setWeeklyReports(cloud.weeklyReports);
+    if (cloud.attendance && hasChanged(attendance, cloud.attendance)) setAttendance(cloud.attendance);
+    if (cloud.payments && hasChanged(payments, cloud.payments)) setPayments(cloud.payments);
     if (cloud.staffMembers && cloud.staffMembers.length > 0) {
       setStaffMembers(cloud.staffMembers);
       // Synchronize passwords from cloud profiles
