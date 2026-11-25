@@ -34,7 +34,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, stats, notifications, payments, staffMembers, logout } = useApp();
+  const { currentUser, stats, notifications, payments, staffMembers, projects, logout } = useApp();
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const pendingPaymentsCount = payments.filter(p => p.status === 'unpaid' || p.status === 'partial').length;
 
@@ -66,7 +66,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Projects',
       href: '/projects',
       icon: FolderKanban,
-      badge: stats.totalActiveProjects,
+      badge: stats.totalProjects ?? projects.length,
       roles: ['admin', 'staff', 'mentor', 'student'],
       permKey: 'manage_projects'
     },

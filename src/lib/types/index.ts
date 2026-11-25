@@ -386,6 +386,7 @@ export interface ActivityLog {
 export interface DashboardStats {
   totalStudents: number;
   totalGroups: number;
+  totalProjects: number;
   totalActiveProjects: number;
   completedProjects: number;
   ongoingProjects: number;

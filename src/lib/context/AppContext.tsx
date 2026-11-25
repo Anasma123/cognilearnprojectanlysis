@@ -840,7 +840,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const visibleProjects = useMemo(() => {
     if (currentUser.role === 'admin') return enrichedProjects;
     const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
-    return enrichedProjects.filter(p => allowedGroupIds.has(p.group_id));
+    return enrichedProjects.filter(p => {
+      if (!p) return false;
+      if (p.group_id && allowedGroupIds.has(p.group_id)) return true;
+      if (p.group?.id && allowedGroupIds.has(p.group.id)) return true;
+      if (p.mentor_id && p.mentor_id === currentUser.id) return true;
+      if (visibleGroups.some(g => g.project?.id === p.id || g.id === p.group_id)) return true;
+      return false;
+    });
   }, [enrichedProjects, visibleGroups, currentUser]);
 
   const visibleTasks = useMemo(() => {
@@ -887,6 +894,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const totalStudents = studs.length;
     const totalGroups = grps.length;
+    const totalProjects = projs.length;
     const totalActiveProjects = projs.filter(p => p && p.status !== 'completed').length;
     const completedProjects = projs.filter(p => p && p.status === 'completed').length;
     const ongoingProjects = projs.filter(p => p && p.status === 'in_progress').length;
@@ -923,6 +931,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return {
       totalStudents,
       totalGroups,
+      totalProjects,
       totalActiveProjects,
       completedProjects,
       ongoingProjects,
