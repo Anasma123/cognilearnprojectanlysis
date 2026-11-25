@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Task, TaskPriority, TaskStatus } from '@/lib/types';
 import { useApp } from '@/lib/context/AppContext';
-import { Users, User, CheckCircle2 } from 'lucide-react';
+import { Users, User, CheckCircle2, Trash2 } from 'lucide-react';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ interface TaskModalProps {
 }
 
 export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
-  const { projects, groups, students, createTask, updateTask } = useApp();
+  const { projects, groups, students, createTask, updateTask, deleteTask } = useApp();
 
   const [targetMode, setTargetMode] = useState<'single' | 'all_groups'>('single');
 
@@ -357,24 +357,45 @@ export function TaskModal({ isOpen, onClose, taskToEdit }: TaskModalProps) {
           />
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
-          >
-            {taskToEdit
-              ? 'Save Changes'
-              : targetMode === 'all_groups'
-              ? `Create Task for All ${groups.length} Groups`
-              : 'Create Group Task'}
-          </button>
+        <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
+          <div>
+            {taskToEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete the task "${taskToEdit.title}"? This cannot be undone.`)) {
+                    deleteTask(taskToEdit.id);
+                    onClose();
+                  }
+                }}
+                className="px-3.5 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-lg text-sm font-semibold transition-all inline-flex items-center gap-1.5"
+                title="Permanently remove this task"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Task</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
+            >
+              {taskToEdit
+                ? 'Save Changes'
+                : targetMode === 'all_groups'
+                ? `Create Task for All ${groups.length} Groups`
+                : 'Create Group Task'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

@@ -54,6 +54,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
     updateMilestone,
     createTask,
     updateTask,
+    deleteTask,
     submitWeeklyReport,
     reviewWeeklyReport,
     markAttendanceBatch,
@@ -710,6 +711,18 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                           <option value="completed">Completed</option>
                           <option value="blocked">Blocked</option>
                         </select>
+
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete task "${task.title}"?`)) {
+                              deleteTask(task.id);
+                            }
+                          }}
+                          title="Delete Task"
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   );

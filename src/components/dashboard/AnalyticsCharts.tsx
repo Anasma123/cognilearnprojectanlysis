@@ -25,12 +25,14 @@ export function AnalyticsCharts() {
     if (groups && groups.length > 0) {
       return groups.map(g => {
         const proj = projects.find(p => p && p.group_id === g.id) || g.project;
-        let progress = proj?.progress_percentage;
+        const gMilestones = (milestones || []).filter(m => m && proj && m.project_id === proj.id);
+        const gTasks = (tasks || []).filter(t => t && (t.group_id === g.id || (proj && t.project_id === proj.id)));
 
-        // If progress is undefined or project not yet enriched, compute on the fly
-        if (progress === undefined) {
-          const gMilestones = (milestones || []).filter(m => m && proj && m.project_id === proj.id);
-          const gTasks = (tasks || []).filter(t => t && (t.group_id === g.id || (proj && t.project_id === proj.id)));
+        // Live calculation incorporating task priorities
+        let progress: number;
+        if (proj?.manual_progress_override && proj.progress_percentage !== undefined) {
+          progress = proj.progress_percentage;
+        } else {
           progress = calculateComputedProgress(
             gMilestones,
             gTasks,
@@ -49,10 +51,23 @@ export function AnalyticsCharts() {
     }
     return (projects || []).map(p => {
       const grp = (groups || []).find(g => g && g.id === p.group_id);
+      const pMilestones = (milestones || []).filter(m => m && m.project_id === p.id);
+      const pTasks = (tasks || []).filter(t => t && (t.project_id === p.id || (p.group_id && t.group_id === p.group_id)));
+
+      let progress = (p.manual_progress_override && p.progress_percentage !== undefined)
+        ? p.progress_percentage
+        : calculateComputedProgress(
+            pMilestones,
+            pTasks,
+            p.presentations,
+            p.lifecycle_phases,
+            p.status
+          );
+
       return {
         name: grp?.group_code || p.project_code || 'Project',
         title: p.title || 'Dissertation',
-        progress: p.progress_percentage ?? 0
+        progress: progress ?? 0
       };
     });
   }, [groups, projects, milestones, tasks]);
@@ -83,7 +98,7 @@ export function AnalyticsCharts() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Group Progress Comparison (%)</h3>
-            <p className="text-xs text-slate-500">Calculated objectively from completed milestone phases & tasks</p>
+            <p className="text-xs text-slate-500">Calculated objectively from milestones & priority-weighted tasks</p>
           </div>
           <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold">
             Term Avg: {termAvg}%

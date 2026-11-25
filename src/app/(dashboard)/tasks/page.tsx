@@ -252,9 +252,22 @@ export default function TasksPage() {
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => { setTaskToEdit(task); setShowAddModal(true); }}
+                            title="Edit Task"
                             className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700"
                           >
                             <Edit className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Are you sure you want to delete "${task.title}"?`)) {
+                                deleteTask(task.id);
+                              }
+                            }}
+                            title="Delete Task"
+                            className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
@@ -391,9 +404,13 @@ export default function TasksPage() {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => deleteTask(task.id)}
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete "${task.title}"?`)) {
+                                deleteTask(task.id);
+                              }
+                            }}
                             title="Delete Task"
-                            className="p-1.5 rounded-md hover:bg-rose-50 text-rose-600"
+                            className="p-1.5 rounded-md hover:bg-rose-50 text-rose-600 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

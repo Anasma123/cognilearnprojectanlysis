@@ -49,7 +49,7 @@ export function formatFileSize(bytes?: number): string {
  */
 export function calculateComputedProgress(
   milestones: { status: string }[] = [],
-  tasks: { status: string }[] = [],
+  tasks: { status?: string; priority?: string }[] = [],
   presentations: { status: string }[] = [],
   lifecyclePhases?: { planning?: boolean; design?: boolean; development?: boolean; testing?: boolean },
   lifecycleStatus?: string
@@ -86,16 +86,48 @@ export function calculateComputedProgress(
     milestoneScore = Math.min(100, Math.round(((completedM + inProgressM * 0.5) / totalMilestones) * 100));
   }
 
-  // 4. Tasks Calculation (Completed = 100%, Under Review = 75%, In Progress = 50%)
+  // 4. Tasks Calculation with Priority Weighting
+  // Priority weights:
+  // - Critical: 4 points (Urgent blockades / core deliverables)
+  // - High: 3 points (Major architectural/sprint components)
+  // - Medium: 2 points (Standard deliverables)
+  // - Low: 1 point (Minor enhancements/polish)
+  // Status completion factor:
+  // - Completed: 1.0 (100%)
+  // - Under Review: 0.75 (75%)
+  // - In Progress: 0.5 (50%)
+  // - Other (Todo/Blocked/Overdue): 0.0 (0%)
   const totalTasks = Array.isArray(tasks) ? tasks.length : 0;
   let taskScore = 0;
   let hasTasks = false;
   if (totalTasks > 0) {
     hasTasks = true;
-    const completedT = tasks.filter(t => t && t.status === 'completed').length;
-    const underReviewT = tasks.filter(t => t && t.status === 'under_review').length;
-    const inProgressT = tasks.filter(t => t && t.status === 'in_progress').length;
-    taskScore = Math.min(100, Math.round(((completedT + underReviewT * 0.75 + inProgressT * 0.5) / totalTasks) * 100));
+    let totalTaskWeight = 0;
+    let earnedTaskWeight = 0;
+
+    tasks.forEach(t => {
+      if (!t) return;
+      // Determine priority weight
+      const normPriority = String(t.priority || 'medium').toLowerCase();
+      let weight = 2; // Default Medium
+      if (normPriority === 'critical') weight = 4;
+      else if (normPriority === 'high') weight = 3;
+      else if (normPriority === 'medium') weight = 2;
+      else if (normPriority === 'low') weight = 1;
+
+      totalTaskWeight += weight;
+
+      // Determine status completion factor
+      const normTaskStatus = String(t.status || '').toLowerCase();
+      let statusFactor = 0;
+      if (normTaskStatus === 'completed') statusFactor = 1.0;
+      else if (normTaskStatus === 'under_review') statusFactor = 0.75;
+      else if (normTaskStatus === 'in_progress') statusFactor = 0.5;
+
+      earnedTaskWeight += weight * statusFactor;
+    });
+
+    taskScore = totalTaskWeight > 0 ? Math.min(100, Math.round((earnedTaskWeight / totalTaskWeight) * 100)) : 0;
   }
 
   // 5. Presentations Score (Completed = 100%, Revision Required = 50%)
