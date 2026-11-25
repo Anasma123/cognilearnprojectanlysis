@@ -118,7 +118,7 @@ export const TABLE_COLUMNS: Record<string, Set<string>> = {
   ]),
   profiles: new Set([
     'id', 'email', 'full_name', 'role', 'phone', 'avatar_url', 'college_id', 'designation',
-    'department', 'permissions', 'is_active', 'created_at', 'updated_at'
+    'department', 'permissions', 'password', 'is_active', 'created_at', 'updated_at'
   ]),
   mentors: new Set([
     'id', 'profile_id', 'full_name', 'email', 'phone', 'specialization', 'designation',
@@ -179,6 +179,7 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
           designation: p.designation || (p.role === 'admin' ? 'Administrator' : 'Staff Coordinator'),
           department: p.department || 'Management',
           is_active: p.is_active ?? true,
+          password: p.password || '123',
           permissions: p.permissions || (p.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
           avatar_url: p.avatar_url,
           created_at: p.created_at || new Date().toISOString(),
@@ -247,6 +248,7 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
           designation: p.designation || (p.role === 'admin' ? 'Administrator' : 'Staff Coordinator'),
           department: p.department || 'Management',
           is_active: p.is_active ?? true,
+          password: p.password || '123',
           permissions: p.permissions || (p.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
           avatar_url: p.avatar_url,
           created_at: p.created_at || new Date().toISOString(),

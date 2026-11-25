@@ -50,6 +50,7 @@ export interface UserProfile {
   phone?: string;
   avatar_url?: string;
   college_id?: string;
+  password?: string;
   is_active: boolean;
   permissions?: StaffPermissions;
   created_at: string;
@@ -442,6 +443,7 @@ export interface StaffMember {
   role: 'admin' | 'staff';
   designation: string;
   department?: string;
+  password?: string;
   is_active: boolean;
   permissions?: StaffPermissions;
   avatar_url?: string;

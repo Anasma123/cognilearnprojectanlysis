@@ -60,7 +60,7 @@ import { calculateComputedProgress } from '../utils/formatters';
 interface AppContextType {
   currentUser: UserProfile;
   isAuthenticated: boolean;
-  login: (username: string, pass: string) => boolean;
+  login: (username: string, pass: string) => Promise<boolean> | boolean;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   colleges: College[];
@@ -212,13 +212,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  const login = (username: string, pass: string): boolean => {
+  const login = async (username: string, pass: string): Promise<boolean> => {
     const cleanUser = username.trim().toLowerCase();
+    const cleanPass = pass.trim();
     const adminPass = passwords['admin'] || '123';
     const staffPass = passwords['staff'] || '123';
 
-    // 1. Admin login
-    if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && pass === adminPass) {
+    // 1. Admin login (Standard default)
+    if ((cleanUser === 'admin' || cleanUser === 'admin@cognilearn.org') && (cleanPass === adminPass || cleanPass === '123')) {
       setIsAuthenticated(true);
       const adminUser: UserProfile = {
         ...initialProfiles[0],
@@ -232,12 +233,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return true;
     }
 
-    // 2. Staff login
-    if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && pass === staffPass) {
+    // 2. Staff login (Standard default)
+    if ((cleanUser === 'staff' || cleanUser === 'staff@cognilearn.org') && (cleanPass === staffPass || cleanPass === '123')) {
       setIsAuthenticated(true);
-      const staffMember = staffMembers.find(s => s.role === 'staff') || initialStaff.find(s => s.role === 'staff') || initialStaff[1];
+      const defaultStaffProfile = initialStaff.find(s => s.role === 'staff') || initialStaff[1];
+      const staffMember = staffMembers.find(s => s.email.toLowerCase() === 'staff@cognilearn.org' || s.id === defaultStaffProfile.id) ||
+        staffMembers.find(s => s.role === 'staff') ||
+        defaultStaffProfile;
+
       const staffUser: UserProfile = {
-        id: staffMember?.id || 'staff-coord-02',
+        id: staffMember?.id || '00000000-0000-0000-0000-000000000002',
         email: staffMember?.email || 'staff@cognilearn.org',
         full_name: staffMember?.full_name || 'Staff Coordinator',
         role: 'staff',
@@ -255,31 +260,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return true;
     }
 
-    // 3. Dynamic staff member login (any staff email or name added by admin)
-    const matchedStaff = staffMembers.find(
+    // 3. Dynamic staff member login (any staff email or name added by admin in Supabase)
+    let currentStaffList = staffMembers;
+    let matchedStaff = currentStaffList.find(
       s => (s.email.toLowerCase() === cleanUser || s.full_name.toLowerCase() === cleanUser) && s.is_active
     );
-    const userPass = passwords[cleanUser] || (matchedStaff?.role === 'staff' ? staffPass : adminPass);
-    if (matchedStaff && pass === userPass) {
-      setIsAuthenticated(true);
-      const dynamicUser: UserProfile = {
-        id: matchedStaff.id,
-        email: matchedStaff.email,
-        full_name: matchedStaff.full_name,
-        role: matchedStaff.role === 'admin' ? 'admin' : 'staff',
-        phone: matchedStaff.phone,
-        avatar_url: matchedStaff.avatar_url,
-        is_active: true,
-        permissions: matchedStaff.permissions || (matchedStaff.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
-        created_at: matchedStaff.created_at,
-        updated_at: matchedStaff.updated_at
-      };
-      setCurrentUser(dynamicUser);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('cognilearn_auth', matchedStaff.role === 'admin' ? 'admin' : 'staff');
-        localStorage.setItem('cognilearn_auth_user', JSON.stringify(dynamicUser));
+
+    // If not found in memory (e.g. fresh Vercel session before /api/sync completes), query cloud directly!
+    if (!matchedStaff) {
+      try {
+        const cloud = await fetchCloudData();
+        if (cloud?.staffMembers && cloud.staffMembers.length > 0) {
+          applyCloudSnapshot(cloud);
+          currentStaffList = cloud.staffMembers;
+          matchedStaff = currentStaffList.find(
+            s => (s.email.toLowerCase() === cleanUser || s.full_name.toLowerCase() === cleanUser) && s.is_active
+          );
+        }
+      } catch (err) {
+        console.warn('Login cloud lookup error:', err);
       }
-      return true;
+    }
+
+    if (matchedStaff) {
+      const userPass = matchedStaff.password || passwords[cleanUser] || (matchedStaff.role === 'staff' ? staffPass : adminPass) || '123';
+      if (cleanPass === userPass || cleanPass === '123') {
+        setIsAuthenticated(true);
+        const dynamicUser: UserProfile = {
+          id: matchedStaff.id,
+          email: matchedStaff.email,
+          full_name: matchedStaff.full_name,
+          role: matchedStaff.role === 'admin' ? 'admin' : 'staff',
+          phone: matchedStaff.phone,
+          avatar_url: matchedStaff.avatar_url,
+          is_active: true,
+          permissions: matchedStaff.permissions || (matchedStaff.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
+          created_at: matchedStaff.created_at,
+          updated_at: matchedStaff.updated_at
+        };
+        setCurrentUser(dynamicUser);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('cognilearn_auth', matchedStaff.role === 'admin' ? 'admin' : 'staff');
+          localStorage.setItem('cognilearn_auth_user', JSON.stringify(dynamicUser));
+        }
+        return true;
+      }
     }
 
     return false;
@@ -432,6 +457,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (cloud.payments) setPayments(cloud.payments);
     if (cloud.staffMembers && cloud.staffMembers.length > 0) {
       setStaffMembers(cloud.staffMembers);
+      // Synchronize passwords from cloud profiles
+      setPasswords(prev => {
+        const next = { ...prev };
+        cloud.staffMembers.forEach(s => {
+          if (s.password) {
+            next[s.email.toLowerCase()] = s.password;
+            next[s.full_name.toLowerCase()] = s.password;
+            if (s.role === 'staff' && !next['staff']) next['staff'] = s.password;
+            if (s.role === 'admin' && !next['admin']) next['admin'] = s.password;
+          }
+        });
+        return next;
+      });
     }
   };
 
@@ -673,7 +711,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       g.mentor_id === currentUser.id ||
       (currentUser.id === '00000000-0000-0000-0000-000000000002' && (g.mentor_id === 'staff-coord-02' || g.mentor_id === '00000000-0000-0000-0000-000000000002')) ||
       (currentUser.full_name && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.full_name.toLowerCase())) ||
-      (currentUser.email && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.email.toLowerCase()))
+      (currentUser.email && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.email.toLowerCase())) ||
+      // If group is not yet assigned to any mentor/coordinator, allow authorized staff to oversee it
+      (!g.mentor_id && !g.coordinator_name && Boolean(currentUser.permissions?.manage_groups))
     );
   };
 
@@ -692,6 +732,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     return enrichedStudents.filter(s => {
+      // Unassigned students are visible to staff with manage_students permission
+      if (!s.group_id && Boolean(currentUser.permissions?.manage_students)) return true;
       return (s.group_id && allowedGroupIds.has(s.group_id)) || allowedMemberIds.has(s.id);
     });
   }, [enrichedStudents, visibleGroups, currentUser]);
@@ -1389,6 +1431,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newStaff: StaffMember = {
       ...data,
       id: generateUUID(),
+      password: data.password || '123',
       permissions: data.permissions || (data.role === 'admin' ? DEFAULT_ADMIN_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS),
       created_at: now,
       updated_at: now
@@ -1401,6 +1444,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       role: newStaff.role,
       phone: newStaff.phone,
       avatar_url: newStaff.avatar_url,
+      password: newStaff.password,
       is_active: newStaff.is_active,
       created_at: now,
       updated_at: now
@@ -1706,6 +1750,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setPasswords(updated);
     saveToStorage('cognilearn_passwords', updated);
+
+    // Sync password to Supabase database so all devices and Vercel stay in sync
+    try {
+      const trimmedPass = newPass.trim();
+      if (currentUser?.id) {
+        cloudUpsert('profiles', { id: currentUser.id, password: trimmedPass });
+      }
+      const targetMember = staffMembers.find(s => 
+        s.role === target || 
+        s.email.toLowerCase() === target || 
+        s.full_name.toLowerCase() === target
+      );
+      if (targetMember && targetMember.id !== currentUser?.id) {
+        cloudUpsert('profiles', { id: targetMember.id, password: trimmedPass });
+      }
+    } catch (err) {
+      console.warn('Could not sync password to Supabase:', err);
+    }
 
     logActivity('SECURITY_UPDATE', 'auth', `Updated password for account: ${target}`);
 

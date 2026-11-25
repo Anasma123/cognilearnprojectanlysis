@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context/AppContext';
-import { Lock, User, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, AlertCircle, ArrowRight, Eye, EyeOff, ShieldCheck, UserCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -32,14 +32,25 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    const success = login(username, password);
+    try {
+      const success = await login(username, password);
 
-    if (success) {
-      router.replace('/dashboard');
-    } else {
-      setError('Invalid username or password. Please try again.');
+      if (success) {
+        router.replace('/dashboard');
+      } else {
+        setError('Invalid username or password. Please verify credentials and try again.');
+        setLoading(false);
+      }
+    } catch {
+      setError('An error occurred during authentication. Please try again.');
       setLoading(false);
     }
+  };
+
+  const handleFillCredentials = (user: string, pass: string) => {
+    setUsername(user);
+    setPassword(pass);
+    setError('');
   };
 
   return (
@@ -47,7 +58,7 @@ export default function LoginPage() {
       {/* Background ambient lighting */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-8 space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-8 space-y-5 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         {/* Brand Header */}
         <div className="text-center space-y-2">
           <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 p-1 flex items-center justify-center mx-auto shadow-md">
@@ -63,6 +74,26 @@ export default function LoginPage() {
           <p className="text-xs text-slate-500 font-medium">
             MES College Academic Project Tracking & Monitoring System
           </p>
+        </div>
+
+        {/* Quick Role Fill Pills */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => handleFillCredentials('admin', '123')}
+            className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-900 font-semibold transition-all cursor-pointer text-left"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <span>Admin (admin)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFillCredentials('staff', '123')}
+            className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-900 font-semibold transition-all cursor-pointer text-left"
+          >
+            <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span>Staff (staff)</span>
+          </button>
         </div>
 
         {/* Error Alert */}
@@ -86,7 +117,7 @@ export default function LoginPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username or email"
+                placeholder="Enter username or email (e.g. staff, admin)"
                 autoComplete="username"
                 className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
               />
