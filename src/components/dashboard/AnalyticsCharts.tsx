@@ -30,7 +30,7 @@ export function AnalyticsCharts() {
 
         // Live calculation incorporating task priorities
         let progress: number;
-        if (proj?.manual_progress_override && proj.progress_percentage !== undefined) {
+        if (proj?.manual_progress_override === true && proj.progress_percentage !== undefined) {
           progress = proj.progress_percentage;
         } else {
           progress = calculateComputedProgress(
@@ -38,14 +38,31 @@ export function AnalyticsCharts() {
             gTasks,
             proj?.presentations,
             proj?.lifecycle_phases,
-            proj?.status
+            proj?.status || 'in_progress'
           );
+        }
+
+        const completedTasksCount = gTasks.filter(t => t.status === 'completed').length;
+        const pendingHighCount = gTasks.filter(t => t.status !== 'completed' && (t.priority === 'high' || t.priority === 'critical')).length;
+        const pendingLowMedCount = gTasks.filter(t => t.status !== 'completed' && (t.priority === 'low' || t.priority === 'medium')).length;
+
+        let taskSummary = '';
+        if (gTasks.length > 0) {
+          taskSummary = `${gTasks.length} task${gTasks.length > 1 ? 's' : ''} (${completedTasksCount} done`;
+          if (pendingHighCount > 0) {
+            taskSummary += `, ${pendingHighCount} high-priority open)`;
+          } else if (pendingLowMedCount > 0) {
+            taskSummary += `, ${pendingLowMedCount} open)`;
+          } else {
+            taskSummary += `)`;
+          }
         }
 
         return {
           name: g.group_code || g.name,
           title: proj?.title || g.project_title || g.name,
-          progress: progress ?? 0
+          progress: progress ?? 0,
+          taskSummary
         };
       });
     }
@@ -54,20 +71,37 @@ export function AnalyticsCharts() {
       const pMilestones = (milestones || []).filter(m => m && m.project_id === p.id);
       const pTasks = (tasks || []).filter(t => t && (t.project_id === p.id || (p.group_id && t.group_id === p.group_id)));
 
-      let progress = (p.manual_progress_override && p.progress_percentage !== undefined)
+      let progress = (p.manual_progress_override === true && p.progress_percentage !== undefined)
         ? p.progress_percentage
         : calculateComputedProgress(
             pMilestones,
             pTasks,
             p.presentations,
             p.lifecycle_phases,
-            p.status
+            p.status || 'in_progress'
           );
+
+      const completedTasksCount = pTasks.filter(t => t.status === 'completed').length;
+      const pendingHighCount = pTasks.filter(t => t.status !== 'completed' && (t.priority === 'high' || t.priority === 'critical')).length;
+      const pendingLowMedCount = pTasks.filter(t => t.status !== 'completed' && (t.priority === 'low' || t.priority === 'medium')).length;
+
+      let taskSummary = '';
+      if (pTasks.length > 0) {
+        taskSummary = `${pTasks.length} task${pTasks.length > 1 ? 's' : ''} (${completedTasksCount} done`;
+        if (pendingHighCount > 0) {
+          taskSummary += `, ${pendingHighCount} high-priority open)`;
+        } else if (pendingLowMedCount > 0) {
+          taskSummary += `, ${pendingLowMedCount} open)`;
+        } else {
+          taskSummary += `)`;
+        }
+      }
 
       return {
         name: grp?.group_code || p.project_code || 'Project',
         title: p.title || 'Dissertation',
-        progress: progress ?? 0
+        progress: progress ?? 0,
+        taskSummary
       };
     });
   }, [groups, projects, milestones, tasks]);
@@ -123,6 +157,11 @@ export function AnalyticsCharts() {
                           <p className="font-bold">{data.name}</p>
                           <p className="text-slate-300 text-[11px] mb-1">{data.title}</p>
                           <p className="text-emerald-400 font-semibold">{data.progress}% Completed</p>
+                          {data.taskSummary && (
+                            <p className="text-slate-300 text-[10px] mt-1 pt-1 border-t border-slate-700/60">
+                              📋 {data.taskSummary}
+                            </p>
+                          )}
                         </div>
                       );
                     }
