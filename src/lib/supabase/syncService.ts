@@ -11,6 +11,7 @@ import {
   AttendanceRecord,
   StudentPayment,
   StaffMember,
+  Mentor,
   DEFAULT_ADMIN_PERMISSIONS,
   DEFAULT_STAFF_PERMISSIONS
 } from '../types';
@@ -27,6 +28,7 @@ export interface CloudDatabaseSnapshot {
   attendance: AttendanceRecord[];
   payments: StudentPayment[];
   staffMembers: StaffMember[];
+  mentors: Mentor[];
   isCloudLoaded: boolean;
 }
 
@@ -66,11 +68,79 @@ const UUID_COLUMNS = new Set([
   'created_by'
 ]);
 
-// Strip relational / joined fields & sanitize UUID columns before sending to Supabase
-function cleanRecord<T extends Record<string, any>>(record: T, relationsToStrip: string[]): Record<string, any> {
+// Whitelist of valid PostgreSQL columns per table to prevent PostgREST schema cache errors (PGRST204)
+export const TABLE_COLUMNS: Record<string, Set<string>> = {
+  colleges: new Set([
+    'id', 'name', 'code', 'address', 'contact_person', 'contact_phone', 'contact_email', 'created_at', 'updated_at'
+  ]),
+  courses: new Set([
+    'id', 'college_id', 'name', 'code', 'department', 'duration_years', 'created_at', 'updated_at'
+  ]),
+  students: new Set([
+    'id', 'profile_id', 'student_reg_no', 'full_name', 'email', 'phone', 'college_id', 'course_id',
+    'department', 'class_year', 'group_id', 'assigned_role', 'joining_date', 'status', 'notes',
+    'avatar_url', 'total_fee', 'paid_amount', 'payment_status', 'batch_id', 'created_at', 'updated_at'
+  ]),
+  groups: new Set([
+    'id', 'group_code', 'name', 'college_id', 'course_id', 'class_year', 'batch_id', 'group_leader_id',
+    'mentor_id', 'coordinator_name', 'member_ids', 'project_title', 'start_date', 'expected_completion_date',
+    'status', 'created_at', 'updated_at'
+  ]),
+  projects: new Set([
+    'id', 'group_id', 'mentor_id', 'project_code', 'title', 'topic', 'description', 'problem_statement',
+    'objectives', 'proposed_solution', 'technologies', 'category', 'start_date', 'expected_completion_date',
+    'status', 'manual_progress_override', 'progress_percentage', 'repository_url', 'live_demo_url',
+    'created_at', 'updated_at', 'presentations', 'lifecycle_phases'
+  ]),
+  project_milestones: new Set([
+    'id', 'project_id', 'step_order', 'name', 'description', 'assigned_student_id', 'start_date',
+    'due_date', 'completion_date', 'status', 'remarks', 'supporting_documents', 'is_custom',
+    'created_at', 'updated_at'
+  ]),
+  tasks: new Set([
+    'id', 'project_id', 'group_id', 'title', 'description', 'assigned_student_id', 'assigned_date',
+    'due_date', 'priority', 'status', 'completion_notes', 'attachments', 'created_by', 'created_at', 'updated_at'
+  ]),
+  weekly_reports: new Set([
+    'id', 'group_id', 'project_id', 'week_number', 'start_date', 'end_date', 'activities_completed',
+    'tasks_completed', 'tasks_in_progress', 'tasks_pending', 'problems_faced', 'solutions_implemented',
+    'technologies_used', 'next_week_plan', 'student_remarks', 'submitted_by', 'submitted_at',
+    'faculty_feedback', 'review_status', 'reviewed_by', 'reviewed_at', 'mentor_id', 'mentor_feedback',
+    'attachments', 'work_completed', 'planned_work', 'blockers', 'created_at', 'updated_at'
+  ]),
+  attendance: new Set([
+    'id', 'student_id', 'group_id', 'college_id', 'date', 'status', 'session_type', 'recorded_by',
+    'remarks', 'marked_by', 'created_at', 'updated_at'
+  ]),
+  student_payments: new Set([
+    'id', 'student_id', 'group_id', 'total_fee', 'paid_amount', 'balance_amount', 'status',
+    'last_payment_date', 'payment_mode', 'receipt_no', 'remarks', 'transactions', 'created_at', 'updated_at'
+  ]),
+  profiles: new Set([
+    'id', 'email', 'full_name', 'role', 'phone', 'avatar_url', 'college_id', 'designation',
+    'department', 'permissions', 'is_active', 'created_at', 'updated_at'
+  ]),
+  mentors: new Set([
+    'id', 'profile_id', 'full_name', 'email', 'phone', 'specialization', 'designation',
+    'department', 'is_active', 'created_at', 'updated_at'
+  ])
+};
+
+// Strip relational / joined fields, whitelist columns, & sanitize UUID columns before sending to Supabase
+export function cleanRecord<T extends Record<string, any>>(
+  table: string,
+  record: T,
+  relationsToStrip: string[] = []
+): Record<string, any> {
+  const allowed = TABLE_COLUMNS[table];
   const clean: Record<string, any> = {};
+
   for (const [k, v] of Object.entries(record)) {
     if (relationsToStrip.includes(k) || v === undefined) {
+      continue;
+    }
+    // Whitelist only columns that actually exist in PostgreSQL for this table
+    if (allowed && !allowed.has(k)) {
       continue;
     }
 
@@ -90,9 +160,12 @@ function cleanRecord<T extends Record<string, any>>(record: T, relationsToStrip:
 }
 
 export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
-  // 1. Try server API route fallback first (/api/sync) as it uses Service Role key and bypasses RLS
+  // 1. Server API route (/api/sync) bypasses client network/CORS/RLS using Service Role
   try {
-    const res = await fetch('/api/sync');
+    const res = await fetch('/api/sync', {
+      cache: 'no-store',
+      headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' }
+    });
     if (res.ok) {
       const json = await res.json();
       if (json.configured && json.data) {
@@ -124,12 +197,13 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
           attendance: d.attendance || [],
           payments: d.payments || [],
           staffMembers,
+          mentors: d.mentors || [],
           isCloudLoaded: true
         };
       }
     }
   } catch (err) {
-    // console.warn('Server sync route notice:', err);
+    // API route fetch fallback
   }
 
   // 2. Direct Supabase client fallback
@@ -146,19 +220,21 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
         weeklyRes,
         attendanceRes,
         paymentsRes,
-        profilesRes
+        profilesRes,
+        mentorsRes
       ] = await Promise.all([
         supabase.from('colleges').select('*'),
         supabase.from('courses').select('*'),
         supabase.from('students').select('*'),
         supabase.from('groups').select('*'),
         supabase.from('projects').select('*'),
-        supabase.from('project_milestones').select('*'),
+        supabase.from('project_milestones').select('*').order('step_order', { ascending: true }),
         supabase.from('tasks').select('*'),
         supabase.from('weekly_reports').select('*'),
         supabase.from('attendance').select('*'),
         supabase.from('student_payments').select('*'),
-        supabase.from('profiles').select('*')
+        supabase.from('profiles').select('*'),
+        supabase.from('mentors').select('*')
       ]);
 
       if (!collegesRes.error && !studentsRes.error) {
@@ -189,6 +265,7 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
           attendance: (attendanceRes.data || []) as AttendanceRecord[],
           payments: (paymentsRes.data || []) as StudentPayment[],
           staffMembers,
+          mentors: (mentorsRes.data || []) as Mentor[],
           isCloudLoaded: true
         };
       }
@@ -200,8 +277,8 @@ export async function fetchCloudData(): Promise<CloudDatabaseSnapshot | null> {
   return null;
 }
 
-// Migrate/Seed Supabase with existing local state if Supabase has 0 records
-export async function seedCloudDataIfEmpty(snapshot: {
+// Push local records that do not yet exist in Supabase to cloud so all connected devices see them
+export async function pushMissingLocalToCloud(local: {
   colleges: College[];
   courses: Course[];
   students: Student[];
@@ -213,65 +290,78 @@ export async function seedCloudDataIfEmpty(snapshot: {
   attendance: AttendanceRecord[];
   payments: StudentPayment[];
   staffMembers: StaffMember[];
-}): Promise<boolean> {
+}, cloud: CloudDatabaseSnapshot): Promise<boolean> {
   try {
-    const current = await fetchCloudData();
-    if (current && (current.students.length > 0 || current.colleges.length > 0)) {
-      return false;
+    const existingCollegeIds = new Set((cloud.colleges || []).map(c => c.id));
+    const missingColleges = (local.colleges || []).filter(c => c && !existingCollegeIds.has(c.id));
+    if (missingColleges.length > 0) {
+      await cloudInsertMany('colleges', missingColleges, []);
     }
 
-    if (snapshot.colleges.length > 0) {
-      await cloudInsertMany('colleges', snapshot.colleges, []);
+    const existingCourseIds = new Set((cloud.courses || []).map(c => c.id));
+    const missingCourses = (local.courses || []).filter(c => c && !existingCourseIds.has(c.id));
+    if (missingCourses.length > 0) {
+      await cloudInsertMany('courses', missingCourses, ['college']);
     }
-    if (snapshot.courses.length > 0) {
-      await cloudInsertMany('courses', snapshot.courses, ['college']);
+
+    const existingStudentIds = new Set((cloud.students || []).map(s => s.id));
+    const missingStudents = (local.students || []).filter(s => s && !existingStudentIds.has(s.id));
+    if (missingStudents.length > 0) {
+      await cloudInsertMany('students', missingStudents, ['college', 'course', 'group']);
     }
-    if (snapshot.groups.length > 0) {
-      await cloudInsertMany('groups', snapshot.groups, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+
+    const existingGroupIds = new Set((cloud.groups || []).map(g => g.id));
+    const missingGroups = (local.groups || []).filter(g => g && !existingGroupIds.has(g.id));
+    if (missingGroups.length > 0) {
+      await cloudInsertMany('groups', missingGroups, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
     }
-    if (snapshot.students.length > 0) {
-      await cloudInsertMany('students', snapshot.students, ['college', 'course', 'group']);
+
+    const existingProjectIds = new Set((cloud.projects || []).map(p => p.id));
+    const missingProjects = (local.projects || []).filter(p => p && !existingProjectIds.has(p.id));
+    if (missingProjects.length > 0) {
+      await cloudInsertMany('projects', missingProjects, ['group', 'mentor', 'milestones', 'tasks']);
     }
-    if (snapshot.projects.length > 0) {
-      await cloudInsertMany('projects', snapshot.projects, ['group', 'mentor', 'milestones', 'tasks']);
+
+    const existingPaymentIds = new Set((cloud.payments || []).map(p => p.id));
+    const missingPayments = (local.payments || []).filter(p => p && !existingPaymentIds.has(p.id));
+    if (missingPayments.length > 0) {
+      await cloudInsertMany('student_payments', missingPayments, ['student', 'group']);
     }
-    if (snapshot.milestones.length > 0) {
-      await cloudInsertMany('project_milestones', snapshot.milestones, ['assigned_student']);
+
+    const existingTaskIds = new Set((cloud.tasks || []).map(t => t.id));
+    const missingTasks = (local.tasks || []).filter(t => t && !existingTaskIds.has(t.id));
+    if (missingTasks.length > 0) {
+      await cloudInsertMany('tasks', missingTasks, ['assigned_student', 'project']);
     }
-    if (snapshot.tasks.length > 0) {
-      await cloudInsertMany('tasks', snapshot.tasks, ['assigned_student', 'project']);
+
+    const existingMilestoneIds = new Set((cloud.milestones || []).map(m => m.id));
+    const missingMilestones = (local.milestones || []).filter(m => m && !existingMilestoneIds.has(m.id));
+    if (missingMilestones.length > 0) {
+      await cloudInsertMany('project_milestones', missingMilestones, ['assigned_student']);
     }
-    if (snapshot.attendance.length > 0) {
-      await cloudInsertMany('attendance', snapshot.attendance, ['student']);
+
+    const existingAttendanceIds = new Set((cloud.attendance || []).map(a => a.id));
+    const missingAttendance = (local.attendance || []).filter(a => a && !existingAttendanceIds.has(a.id));
+    if (missingAttendance.length > 0) {
+      await cloudInsertMany('attendance', missingAttendance, ['student']);
     }
-    if (snapshot.payments.length > 0) {
-      await cloudInsertMany('student_payments', snapshot.payments, ['student', 'group']);
-    }
-    if (snapshot.staffMembers.length > 0) {
-      const staffPayload = snapshot.staffMembers.map(s => ({
-        id: s.id,
-        email: s.email,
-        full_name: s.full_name,
-        role: s.role,
-        phone: s.phone,
-        avatar_url: s.avatar_url,
-        is_active: s.is_active,
-        created_at: s.created_at,
-        updated_at: s.updated_at
-      }));
-      await cloudInsertMany('profiles', staffPayload, []);
+
+    const existingWeeklyIds = new Set((cloud.weeklyReports || []).map(w => w.id));
+    const missingWeekly = (local.weeklyReports || []).filter(w => w && !existingWeeklyIds.has(w.id));
+    if (missingWeekly.length > 0) {
+      await cloudInsertMany('weekly_reports', missingWeekly, ['group', 'project', 'submitter', 'mentor']);
     }
 
     return true;
   } catch (err) {
-    console.warn('Could not seed local data to Supabase:', err);
+    console.warn('Push missing local to cloud notice:', err);
     return false;
   }
 }
 
 // Real-time Cloud Mutation Helpers: Always use server API route first to bypass RLS with Service Role Key
 export async function cloudUpsert(table: string, data: Record<string, any>, relationsToStrip: string[] = []) {
-  const payload = cleanRecord(data, relationsToStrip);
+  const payload = cleanRecord(table, data, relationsToStrip);
 
   try {
     const res = await fetch('/api/sync', {
@@ -281,7 +371,7 @@ export async function cloudUpsert(table: string, data: Record<string, any>, rela
     });
     if (res.ok) return;
   } catch (err) {
-    // console.warn(`Server route upsert notice on ${table}:`, err);
+    // Fallback
   }
 
   // Direct Supabase fallback
@@ -303,7 +393,7 @@ export async function cloudDelete(table: string, id: string) {
     });
     if (res.ok) return;
   } catch (err) {
-    // console.warn(`Server route delete notice on ${table}:`, err);
+    // Fallback
   }
 
   if (supabase && isSupabaseConfigured) {
@@ -325,7 +415,7 @@ export async function cloudDeleteStudentCascade(studentId: string) {
     });
     if (res.ok) return;
   } catch (err) {
-    // console.warn('Server cascade delete notice:', err);
+    // Fallback
   }
 
   if (supabase && isSupabaseConfigured) {
@@ -349,7 +439,7 @@ export async function cloudDeleteStudentCascade(studentId: string) {
 
 export async function cloudInsertMany(table: string, records: Record<string, any>[], relationsToStrip: string[] = []) {
   if (!records || records.length === 0) return;
-  const payload = records.map(r => cleanRecord(r, relationsToStrip));
+  const payload = records.map(r => cleanRecord(table, r, relationsToStrip));
 
   try {
     const res = await fetch('/api/sync', {
@@ -359,7 +449,7 @@ export async function cloudInsertMany(table: string, records: Record<string, any
     });
     if (res.ok) return;
   } catch (err) {
-    // console.warn(`Server route batch upsert notice on ${table}:`, err);
+    // Fallback
   }
 
   if (supabase && isSupabaseConfigured) {

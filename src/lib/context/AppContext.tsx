@@ -47,12 +47,13 @@ import {
 } from '../data/initialData';
 import {
   fetchCloudData,
-  seedCloudDataIfEmpty,
+  pushMissingLocalToCloud,
   cloudUpsert,
   cloudDelete,
   cloudDeleteStudentCascade,
   cloudInsertMany,
-  generateUUID
+  generateUUID,
+  CloudDatabaseSnapshot
 } from '../supabase/syncService';
 import { calculateComputedProgress } from '../utils/formatters';
 
@@ -152,6 +153,11 @@ interface AppContextType {
 
   // Password Actions
   changePassword: (oldPass: string, newPass: string, usernameOrRole?: string) => { success: boolean; message: string };
+
+  // Supabase Cloud Sync Status
+  isCloudConnected: boolean;
+  isSyncing: boolean;
+  forceCloudSync: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -409,65 +415,101 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Array.from(mergedMap.values());
   }
 
+  // Supabase Live Connection & Sync States
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const applyCloudSnapshot = (cloud: CloudDatabaseSnapshot) => {
+    if (cloud.colleges) setColleges(cloud.colleges);
+    if (cloud.courses) setCourses(cloud.courses);
+    if (cloud.students) setStudents(cloud.students);
+    if (cloud.groups) setGroups(cloud.groups);
+    if (cloud.projects) setProjects(cloud.projects);
+    if (cloud.milestones) setMilestones(cloud.milestones);
+    if (cloud.tasks) setTasks(cloud.tasks);
+    if (cloud.weeklyReports) setWeeklyReports(cloud.weeklyReports);
+    if (cloud.attendance) setAttendance(cloud.attendance);
+    if (cloud.payments) setPayments(cloud.payments);
+    if (cloud.staffMembers && cloud.staffMembers.length > 0) {
+      setStaffMembers(cloud.staffMembers);
+    }
+  };
+
+  const forceCloudSync = async () => {
+    setIsSyncing(true);
+    try {
+      const cloud = await fetchCloudData();
+      if (cloud && cloud.isCloudLoaded) {
+        setIsCloudConnected(true);
+        applyCloudSnapshot(cloud);
+      }
+    } catch (err) {
+      console.warn('Manual cloud sync notice:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Cloud Database Live Synchronization (Supabase)
   useEffect(() => {
     let isMounted = true;
 
     async function initCloudSync() {
       try {
+        setIsSyncing(true);
         const cloud = await fetchCloudData();
+        
         if (!cloud || !isMounted) return;
 
+        setIsCloudConnected(true);
+
         const hasCloudRecords = (
-          cloud.students.length > 0 ||
-          cloud.groups.length > 0 ||
-          cloud.colleges.length > 0 ||
-          cloud.projects.length > 0
+          (cloud.students && cloud.students.length > 0) ||
+          (cloud.groups && cloud.groups.length > 0) ||
+          (cloud.projects && cloud.projects.length > 0) ||
+          (cloud.colleges && cloud.colleges.length > 0)
         );
 
         if (hasCloudRecords) {
-          // Merge safely with existing local state instead of wiping out localStorage
-          setColleges(prev => mergeEntities(prev, cloud.colleges, deletedIdsRef.current));
-          setCourses(prev => mergeEntities(prev, cloud.courses, deletedIdsRef.current));
-          setStudents(prev => mergeEntities(prev, cloud.students, deletedIdsRef.current));
-          setGroups(prev => mergeEntities(prev, cloud.groups, deletedIdsRef.current));
-          setProjects(prev => mergeEntities(prev, cloud.projects, deletedIdsRef.current));
-          setMilestones(prev => mergeEntities(prev, cloud.milestones, deletedIdsRef.current));
-          setTasks(prev => mergeEntities(prev, cloud.tasks, deletedIdsRef.current));
-          setWeeklyReports(prev => mergeEntities(prev, cloud.weeklyReports, deletedIdsRef.current));
-          setAttendance(prev => mergeEntities(prev, cloud.attendance, deletedIdsRef.current));
-          setPayments(prev => mergeEntities(prev, cloud.payments, deletedIdsRef.current));
-          setStaffMembers(prev => mergeEntities(prev, cloud.staffMembers, deletedIdsRef.current));
+          // Supabase is the central single source of truth across all laptops & devices
+          applyCloudSnapshot(cloud);
+        } else {
+          // If cloud has 0 records, but this local device has existing records in localStorage,
+          // push them up to Supabase so that all other devices immediately receive them!
+          await pushMissingLocalToCloud({
+            colleges,
+            courses,
+            students,
+            groups,
+            projects,
+            milestones,
+            tasks,
+            weeklyReports,
+            attendance,
+            payments,
+            staffMembers
+          }, cloud);
         }
       } catch (err) {
         console.warn('Cloud sync initialization notice:', err);
+      } finally {
+        if (isMounted) setIsSyncing(false);
       }
     }
 
     initCloudSync();
 
-    // Background polling with safe merge that preserves active local additions and debounces during edits
+    // Fast 4-second background polling to keep all laptops, devices, and tabs 100% in sync
     const pollInterval = setInterval(async () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      if (Date.now() - lastLocalEditTime.current < 30000) return; // Skip if user actively made edits in last 30s
+      if (Date.now() - lastLocalEditTime.current < 3000) return; // Brief debounce during active local typing
 
       const cloud = await fetchCloudData();
       if (!cloud || !isMounted) return;
 
-      if (cloud.students.length > 0 || cloud.groups.length > 0 || cloud.colleges.length > 0) {
-        setColleges(prev => mergeEntities(prev, cloud.colleges, deletedIdsRef.current));
-        setCourses(prev => mergeEntities(prev, cloud.courses, deletedIdsRef.current));
-        setStudents(prev => mergeEntities(prev, cloud.students, deletedIdsRef.current));
-        setGroups(prev => mergeEntities(prev, cloud.groups, deletedIdsRef.current));
-        setProjects(prev => mergeEntities(prev, cloud.projects, deletedIdsRef.current));
-        setMilestones(prev => mergeEntities(prev, cloud.milestones, deletedIdsRef.current));
-        setTasks(prev => mergeEntities(prev, cloud.tasks, deletedIdsRef.current));
-        setWeeklyReports(prev => mergeEntities(prev, cloud.weeklyReports, deletedIdsRef.current));
-        setAttendance(prev => mergeEntities(prev, cloud.attendance, deletedIdsRef.current));
-        setPayments(prev => mergeEntities(prev, cloud.payments, deletedIdsRef.current));
-        setStaffMembers(prev => mergeEntities(prev, cloud.staffMembers, deletedIdsRef.current));
-      }
-    }, 15000);
+      setIsCloudConnected(true);
+      applyCloudSnapshot(cloud);
+    }, 4000);
 
     return () => {
       isMounted = false;
@@ -1731,7 +1773,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveEvaluation,
         markNotificationRead,
         markAllNotificationsRead,
-        changePassword
+        changePassword,
+        isCloudConnected,
+        isSyncing,
+        forceCloudSync
       }}
     >
       {children}

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+const FALLBACK_URL = 'https://ptsitpiqzcxspkbrcxwi.supabase.co';
+const FALLBACK_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0c2l0cGlxemN4c3BrYnJjeHdpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NTI0MTY1OSwiZXhwIjoyMTEwODE3NjU5fQ.qOxU4HN-eH1PjP2PBTl3jyQVJW9uFkziP8445J_D4PQ';
+
 function getSupabaseServerClient() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -9,7 +12,7 @@ function getSupabaseServerClient() {
     process.env.STORAGE_URL ||
     process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL ||
     process.env.STORAGE_SUPABASE_URL ||
-    '';
+    FALLBACK_URL;
 
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -19,28 +22,38 @@ function getSupabaseServerClient() {
     process.env.STORAGE_SECRET_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY ||
-    process.env.STORAGE_ANON_KEY ||
-    process.env.STORAGE_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    '';
+    FALLBACK_SERVICE_ROLE_KEY;
 
   if (!url || !key || url.includes('your-project') || key.includes('...')) {
     return null;
   }
-  return createClient(url, key);
+  return createClient(url, key, {
+    auth: { persistSession: false }
+  });
 }
+
+// Force dynamic rendering and prevent Vercel / browser caching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   const client: any = getSupabaseServerClient();
   if (!client) {
-    return NextResponse.json({ configured: false, message: 'Supabase credentials not configured' }, { status: 200 });
+    return NextResponse.json(
+      { configured: false, message: 'Supabase credentials not configured' },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        }
+      }
+    );
   }
 
   try {
-    const safeSelect = async (table: string) => {
+    const safeSelect = async (table: string, orderCol = 'created_at') => {
       try {
-        const { data, error } = await client.from(table).select('*');
+        const { data, error } = await client.from(table).select('*').order(orderCol, { ascending: true });
         if (error) {
           console.warn(`Safe select notice on ${table}:`, error.message);
           return [];
@@ -63,39 +76,59 @@ export async function GET() {
       weekly,
       attendance,
       payments,
-      profiles
+      profiles,
+      mentors
     ] = await Promise.all([
       safeSelect('colleges'),
       safeSelect('courses'),
       safeSelect('students'),
       safeSelect('groups'),
       safeSelect('projects'),
-      safeSelect('project_milestones'),
+      safeSelect('project_milestones', 'step_order'),
       safeSelect('tasks'),
       safeSelect('weekly_reports'),
       safeSelect('attendance'),
       safeSelect('student_payments'),
-      safeSelect('profiles')
+      safeSelect('profiles'),
+      safeSelect('mentors')
     ]);
 
-    return NextResponse.json({
-      configured: true,
-      data: {
-        colleges,
-        courses,
-        students,
-        groups,
-        projects,
-        milestones,
-        tasks,
-        weeklyReports: weekly,
-        attendance,
-        payments,
-        staffMembers: profiles
+    return NextResponse.json(
+      {
+        configured: true,
+        timestamp: new Date().toISOString(),
+        data: {
+          colleges,
+          courses,
+          students,
+          groups,
+          projects,
+          milestones,
+          tasks,
+          weeklyReports: weekly,
+          attendance,
+          payments,
+          staffMembers: profiles,
+          mentors
+        }
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        }
       }
-    });
+    );
   } catch (err: any) {
-    return NextResponse.json({ configured: false, error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { configured: false, error: err.message },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        }
+      }
+    );
   }
 }
 
@@ -109,7 +142,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, table, record, records, id, student_id } = body;
 
-    // Dedicated Cascade Delete for Students (Removes student and all related payments, attendance, tasks, evaluations)
+    // Dedicated Cascade Delete for Students
     if (action === 'delete_student_cascade' && (id || student_id)) {
       const targetStudentId = id || student_id;
       

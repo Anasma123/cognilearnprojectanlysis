@@ -1,6 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
+const FALLBACK_URL = 'https://ptsitpiqzcxspkbrcxwi.supabase.co';
+const FALLBACK_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0c2l0cGlxemN4c3BrYnJjeHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyNDE2NTksImV4cCI6MjExMDgxNzY1OX0.S23mfv3RsderiAlxyBd28gpXdyJGvIaW1XbsKGr5rTc';
+
 export function createClient(cookieStore?: ReturnType<typeof cookies>) {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -9,7 +12,7 @@ export function createClient(cookieStore?: ReturnType<typeof cookies>) {
     process.env.STORAGE_URL ||
     process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL ||
     process.env.STORAGE_SUPABASE_URL ||
-    '';
+    FALLBACK_URL;
 
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -20,7 +23,7 @@ export function createClient(cookieStore?: ReturnType<typeof cookies>) {
     process.env.STORAGE_ANON_KEY ||
     process.env.NEXT_PUBLIC_STORAGE_SUPABASE_ANON_KEY ||
     process.env.STORAGE_SUPABASE_ANON_KEY ||
-    '';
+    FALLBACK_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your-project')) {
     return null;
@@ -42,8 +45,7 @@ export function createClient(cookieStore?: ReturnType<typeof cookies>) {
               store.set(name, value, options)
             );
           } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing user sessions.
+            // Ignored if in Server Component
           }
         },
       },
