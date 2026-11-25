@@ -29,6 +29,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useApp } from '@/lib/context/AppContext';
+import { StaffPermissions } from '@/lib/types';
 import { ChangePasswordModal } from '../common/ChangePasswordModal';
 
 interface TopNavProps {
@@ -63,28 +64,55 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const primaryNavItems = [
+  const primaryNavItems: Array<{
+    title: string;
+    href: string;
+    icon: any;
+    adminOnly?: boolean;
+    permKey?: keyof StaffPermissions;
+  }> = [
     { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { title: 'Students', href: '/students', icon: GraduationCap },
-    { title: 'Groups', href: '/groups', icon: Users },
-    { title: 'Projects', href: '/projects', icon: FolderKanban },
-    { title: 'Payments', href: '/payments', icon: CreditCard },
-    { title: 'Attendance', href: '/attendance', icon: CalendarDays },
-    { title: 'Tasks', href: '/tasks', icon: ListTodo },
-    { title: 'Weekly Reports', href: '/weekly-progress', icon: CalendarCheck2 },
+    { title: 'Students', href: '/students', icon: GraduationCap, permKey: 'manage_students' },
+    { title: 'Groups', href: '/groups', icon: Users, permKey: 'manage_groups' },
+    { title: 'Projects', href: '/projects', icon: FolderKanban, permKey: 'manage_projects' },
+    { title: 'Payments', href: '/payments', icon: CreditCard, permKey: 'record_payments' },
+    { title: 'Attendance', href: '/attendance', icon: CalendarDays, permKey: 'mark_attendance' },
+    { title: 'Tasks', href: '/tasks', icon: ListTodo, permKey: 'assign_tasks' },
+    { title: 'Weekly Reports', href: '/weekly-progress', icon: CalendarCheck2, permKey: 'mentor_reviews' },
     { title: 'Staff', href: '/staff', icon: UserCog, adminOnly: true }
   ];
 
-  const moreNavItems = [
+  const moreNavItems: Array<{
+    title: string;
+    href: string;
+    icon: any;
+    adminOnly?: boolean;
+    permKey?: keyof StaffPermissions;
+  }> = [
     { title: '13 Milestones', href: '/milestones', icon: Milestone },
     { title: 'Analytics', href: '/analytics', icon: LineChart },
-    { title: 'Reports & Export', href: '/reports', icon: FileBarChart },
+    { title: 'Reports & Export', href: '/reports', icon: FileBarChart, permKey: 'export_reports' },
     { title: 'Documents', href: '/documents', icon: FileText },
     { title: 'Settings & Supabase', href: '/settings', icon: Settings, adminOnly: true }
   ];
 
-  const filteredPrimary = primaryNavItems.filter(item => !item.adminOnly || currentUser?.role === 'admin' || currentUser?.role === 'staff');
-  const filteredMore = moreNavItems.filter(item => !item.adminOnly || currentUser?.role === 'admin' || currentUser?.role === 'staff');
+  const filterNavItem = (item: { adminOnly?: boolean; permKey?: keyof StaffPermissions }) => {
+    // Admin has full master access to everything
+    if (currentUser?.role === 'admin') return true;
+
+    // Staff / Coordinator can never see adminOnly pages (Settings, Staff management)
+    if (item.adminOnly) return false;
+
+    // If staff, verify specific module permission toggle
+    if (currentUser?.role === 'staff' && item.permKey && currentUser.permissions) {
+      return Boolean(currentUser.permissions[item.permKey]);
+    }
+
+    return true;
+  };
+
+  const filteredPrimary = primaryNavItems.filter(filterNavItem);
+  const filteredMore = moreNavItems.filter(filterNavItem);
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">

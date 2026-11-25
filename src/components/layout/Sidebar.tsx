@@ -51,21 +51,24 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/students',
       icon: GraduationCap,
       badge: stats.totalStudents,
-      roles: ['admin', 'staff', 'mentor']
+      roles: ['admin', 'staff', 'mentor'],
+      permKey: 'manage_students'
     },
     {
       title: 'Groups',
       href: '/groups',
       icon: Users,
       badge: stats.totalGroups,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'manage_groups'
     },
     {
       title: 'Projects',
       href: '/projects',
       icon: FolderKanban,
       badge: stats.totalActiveProjects,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'manage_projects'
     },
     {
       title: 'Payments',
@@ -73,14 +76,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CreditCard,
       badge: pendingPaymentsCount > 0 ? `${pendingPaymentsCount} Due` : 'All Paid',
       badgeAlert: pendingPaymentsCount > 0,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'record_payments'
     },
     {
       title: 'Staff & Admins',
       href: '/staff',
       icon: UserCog,
       badge: staffMembers.length,
-      roles: ['admin', 'staff']
+      roles: ['admin']
     },
     {
       title: 'Tasks',
@@ -88,7 +92,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: ListTodo,
       badge: stats.pendingTasks > 0 ? `${stats.pendingTasks}` : null,
       badgeAlert: stats.overdueTasks > 0,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'assign_tasks'
     },
     {
       title: 'Milestones',
@@ -103,14 +108,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CalendarCheck2,
       badge: stats.weeklyUpdatesPendingReview > 0 ? `${stats.weeklyUpdatesPendingReview} pending` : null,
       badgeAlert: stats.weeklyUpdatesPendingReview > 0,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'mentor_reviews'
     },
     {
       title: 'Attendance',
       href: '/attendance',
       icon: CalendarDays,
       badge: `${stats.overallAttendancePercentage}%`,
-      roles: ['admin', 'staff', 'mentor', 'student']
+      roles: ['admin', 'staff', 'mentor', 'student'],
+      permKey: 'mark_attendance'
     },
     {
       title: 'Analytics',
@@ -131,7 +138,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/reports',
       icon: FileBarChart,
       badge: null,
-      roles: ['admin', 'staff', 'mentor']
+      roles: ['admin', 'staff', 'mentor'],
+      permKey: 'export_reports'
     },
     {
       title: 'Notifications',
@@ -146,12 +154,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/settings',
       icon: Settings,
       badge: null,
-      roles: ['admin', 'staff']
+      roles: ['admin']
     }
   ];
 
   const currentRole = currentUser?.role || 'admin';
-  const filteredNav = navItems.filter(item => item.roles.includes(currentRole));
+  const filteredNav = navItems.filter(item => {
+    if (!item.roles.includes(currentRole)) return false;
+    if (currentRole === 'staff' && (item as any).permKey && currentUser?.permissions) {
+      return Boolean((currentUser.permissions as any)[(item as any).permKey]);
+    }
+    return true;
+  });
 
   return (
     <>

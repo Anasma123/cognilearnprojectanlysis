@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/lib/context/AppContext';
 import {
   StaffMember,
@@ -218,6 +219,26 @@ export default function StaffPage() {
       setStaffToDelete(null);
     }
   };
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 max-w-lg mx-auto my-12 space-y-3 shadow-xs">
+        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-black text-slate-900">Access Restricted</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Only System Administrators have authorization to manage staff accounts, credentials, and access permissions.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors"
+        >
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -538,82 +559,96 @@ export default function StaffPage() {
 
           {/* Granular Permission Toggles Section */}
           <div className="pt-3 border-t border-slate-200">
-            <div className="flex items-center justify-between mb-2.5">
-              <div>
-                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" />
-                  Allowed Functions & Operational Permissions
-                </h4>
-                <p className="text-[11px] text-slate-500">
-                  Toggle the specific administrative modules this staff member is authorized to access
-                </p>
+            {formData.role === 'admin' ? (
+              <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-purple-950">Administrator - Full Master Control</h4>
+                  <p className="text-[11px] text-purple-700 mt-0.5 leading-relaxed">
+                    System Administrators have full unrestricted access to all student rosters, project cohorts, financial records, staff permissions, and settings.
+                  </p>
+                </div>
               </div>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleToggleAllPermissions(true)}
-                  className="px-2 py-1 rounded text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-                >
-                  Enable All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleToggleAllPermissions(false)}
-                  className="px-2 py-1 rounded text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-                >
-                  Disable All
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
-              {PERMISSION_CONFIG.map((p) => {
-                const Icon = p.icon;
-                const isEnabled = Boolean(formData.permissions[p.key]);
-
-                return (
-                  <div
-                    key={p.key}
-                    onClick={() => togglePermission(p.key)}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                      isEnabled
-                        ? 'bg-blue-50/70 border-blue-200 shadow-2xs'
-                        : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70 opacity-75'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5 pr-2">
-                      <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
-                        isEnabled ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
-                      }`}>
-                        <Icon className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <p className={`text-xs font-bold ${isEnabled ? 'text-blue-950' : 'text-slate-700'}`}>
-                          {p.label}
-                        </p>
-                        <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
-                          {p.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* iOS style Toggle Switch */}
-                    <div
-                      className={`shrink-0 w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
-                        isEnabled ? 'bg-blue-600' : 'bg-slate-300'
-                      }`}
-                    >
-                      <div
-                        className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                          isEnabled ? 'translate-x-4.5' : 'translate-x-0'
-                        }`}
-                      />
-                    </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      Staff / Coordinator Allowed Functions
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Toggle the operational modules this staff coordinator is authorized to access
+                    </p>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAllPermissions(true)}
+                      className="px-2 py-1 rounded text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                    >
+                      Enable All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAllPermissions(false)}
+                      className="px-2 py-1 rounded text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                    >
+                      Disable All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                  {PERMISSION_CONFIG.map((p) => {
+                    const Icon = p.icon;
+                    const isEnabled = Boolean(formData.permissions[p.key]);
+
+                    return (
+                      <div
+                        key={p.key}
+                        onClick={() => togglePermission(p.key)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                          isEnabled
+                            ? 'bg-blue-50/70 border-blue-200 shadow-2xs'
+                            : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70 opacity-75'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5 pr-2">
+                          <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                            isEnabled ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
+                          }`}>
+                            <Icon className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <p className={`text-xs font-bold ${isEnabled ? 'text-blue-950' : 'text-slate-700'}`}>
+                              {p.label}
+                            </p>
+                            <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                              {p.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* iOS style Toggle Switch */}
+                        <div
+                          className={`shrink-0 w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                            isEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                              isEnabled ? 'translate-x-4.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

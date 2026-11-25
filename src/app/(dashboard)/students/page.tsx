@@ -86,7 +86,7 @@ export default function StudentsPage() {
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            MES College Student Directory
+            Student Directory
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             Manage academic profiles, group assignments, attendance, and evaluation dossiers.

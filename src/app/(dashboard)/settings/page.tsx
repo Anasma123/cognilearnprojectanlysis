@@ -46,6 +46,26 @@ export default function SettingsPage() {
     setNewCourseDept('');
   };
 
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 max-w-lg mx-auto my-12 space-y-3 shadow-xs">
+        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-black text-slate-900">Access Restricted</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Only System Administrators have authorization to modify institutional college affiliations, departments, and system database settings.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors"
+        >
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
