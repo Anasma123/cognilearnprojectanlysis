@@ -13,7 +13,7 @@ interface StudentModalProps {
 }
 
 export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalProps) {
-  const { colleges, courses, groups, students, addStudent, updateStudent, addCollege, addCourse } = useApp();
+  const { colleges, courses, groups, students, addStudent, updateStudent, addCollege, addCourse, currentUser } = useApp();
 
   // Helper to compute next unique sequential student ID: 1, 2, 3...
   const computeNextStudentId = () => {
@@ -77,6 +77,7 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
       const nextId = computeNextStudentId();
       const defaultCollege = colleges[0]?.id || '';
       const defaultCourse = courses[0]?.id || '';
+      const defaultGroup = currentUser.role === 'staff' && groups.length > 0 ? groups[0].id : '';
 
       setFormData({
         student_reg_no: nextId,
@@ -87,7 +88,7 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
         course_id: defaultCourse,
         department: '',
         class_year: 'Final Year',
-        group_id: '',
+        group_id: defaultGroup,
         assigned_role: 'Full-Stack Developer',
         joining_date: new Date().toISOString().split('T')[0],
         status: 'active',
@@ -322,18 +323,22 @@ export function StudentModal({ isOpen, onClose, studentToEdit }: StudentModalPro
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Assigned Project Group
+              Assigned Project Group {currentUser.role === 'staff' && <span className="text-rose-500">*</span>}
             </label>
             <select
               value={formData.group_id}
+              required={currentUser.role === 'staff'}
               onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none bg-white"
             >
-              <option value="">-- No Group (Can cluster later) --</option>
+              <option value="">{currentUser.role === 'staff' ? '-- Select Your Assigned Group --' : '-- No Group (Can cluster later) --'}</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>
               ))}
             </select>
+            {currentUser.role === 'staff' && (
+              <p className="text-[10px] text-slate-400 mt-0.5">Students enrolled by staff must be assigned to your cohort</p>
+            )}
           </div>
 
           <div>

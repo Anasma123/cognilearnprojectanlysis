@@ -63,7 +63,7 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
       setSelectedStudentIds(currentMemberIds);
     } else {
       const defaultStaff = (currentUser.role === 'staff')
-        ? (staffMembers.find(s => s.id === currentUser.id || s.email === currentUser.email) || staffMembers[0])
+        ? (staffMembers.find(s => s.id === currentUser.id || (currentUser.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) || (currentUser.full_name && s.full_name.toLowerCase() === currentUser.full_name.toLowerCase())) || staffMembers[0])
         : staffMembers[0];
 
       setFormData({
@@ -329,15 +329,19 @@ export function GroupModal({ isOpen, onClose, groupToEdit }: GroupModalProps) {
             </label>
             <select
               value={formData.mentor_id}
+              disabled={currentUser.role !== 'admin'}
               onChange={(e) => handleCoordinatorChange(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none bg-white"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500 cursor-pointer disabled:cursor-not-allowed"
             >
               {staffMembers.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.full_name} ({s.designation} - {s.role.toUpperCase()})
+                  {s.full_name} ({s.designation || (s.role === 'admin' ? 'Administrator' : 'Staff Coordinator')} - {s.role.toUpperCase()})
                 </option>
               ))}
             </select>
+            {currentUser.role !== 'admin' && (
+              <p className="text-[10px] text-slate-400 mt-0.5">Assigned to your staff account (Only Admins can reassign cohorts)</p>
+            )}
           </div>
 
           <div>

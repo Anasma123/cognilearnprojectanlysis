@@ -754,15 +754,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Helper to determine if a group belongs to the currently logged-in user
   const isUserInChargeOfGroup = (g: Group) => {
+    // 1. Admin has complete, unrestricted access across all groups
     if (currentUser.role === 'admin') return true;
-    return (
-      g.mentor_id === currentUser.id ||
-      (currentUser.id === '00000000-0000-0000-0000-000000000002' && (g.mentor_id === 'staff-coord-02' || g.mentor_id === '00000000-0000-0000-0000-000000000002')) ||
-      (currentUser.full_name && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.full_name.toLowerCase())) ||
-      (currentUser.email && g.coordinator_name && g.coordinator_name.toLowerCase().includes(currentUser.email.toLowerCase())) ||
-      // If group is not yet assigned to any mentor/coordinator, allow authorized staff to oversee it
-      (!g.mentor_id && !g.coordinator_name && Boolean(currentUser.permissions?.manage_groups))
-    );
+
+    // 2. Staff: ONLY groups explicitly assigned to this staff member
+    if (!g) return false;
+
+    // Direct ID match on mentor_id
+    if (g.mentor_id && g.mentor_id === currentUser.id) return true;
+
+    // Legacy default coordinator ID compatibility
+    if (
+      currentUser.id === '00000000-0000-0000-0000-000000000002' &&
+      (g.mentor_id === 'staff-coord-02' || g.mentor_id === '00000000-0000-0000-0000-000000000002')
+    ) {
+      return true;
+    }
+
+    // Lookup staff profile matching mentor_id
+    if (g.mentor_id && staffMembers && staffMembers.length > 0) {
+      const assignedStaff = staffMembers.find(s => s.id === g.mentor_id);
+      if (assignedStaff) {
+        if (assignedStaff.id === currentUser.id) return true;
+        if (currentUser.email && assignedStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+        if (currentUser.full_name && assignedStaff.full_name.toLowerCase() === currentUser.full_name.toLowerCase()) return true;
+      }
+    }
+
+    // Full name match on coordinator_name
+    if (currentUser.full_name && g.coordinator_name) {
+      const coordName = g.coordinator_name.trim().toLowerCase();
+      const staffName = currentUser.full_name.trim().toLowerCase();
+      if (coordName === staffName || coordName.includes(staffName)) return true;
+    }
+
+    // Email match on coordinator_name
+    if (currentUser.email && g.coordinator_name) {
+      const coordName = g.coordinator_name.trim().toLowerCase();
+      const staffEmail = currentUser.email.trim().toLowerCase();
+      if (coordName.includes(staffEmail)) return true;
+    }
+
+    // Non-admin staff cannot see unassigned groups or groups assigned to others
+    return false;
   };
 
   // Filtered views based on staff in-charge assignment
@@ -772,7 +806,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [enrichedGroups, currentUser]);
 
   const visibleStudents = useMemo(() => {
+    // Admin has full visibility of all students across the entire institution
     if (currentUser.role === 'admin') return enrichedStudents;
+
+    // Staff ONLY sees students assigned to their specific groups
     const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
     const allowedMemberIds = new Set<string>();
     visibleGroups.forEach(g => {
@@ -780,8 +817,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     return enrichedStudents.filter(s => {
-      // Unassigned students are visible to staff with manage_students permission
-      if (!s.group_id && Boolean(currentUser.permissions?.manage_students)) return true;
+      if (!s) return false;
       return (s.group_id && allowedGroupIds.has(s.group_id)) || allowedMemberIds.has(s.id);
     });
   }, [enrichedStudents, visibleGroups, currentUser]);
@@ -1028,6 +1064,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setStudents(prev => [newStudent, ...prev]);
     cloudUpsert('students', newStudent, ['college', 'course', 'group']);
+
+    // If assigned to a group at creation, also update group's member_ids
+    if (data.group_id) {
+      setGroups(prev => prev.map(g => {
+        if (g.id === data.group_id) {
+          const mIds = g.member_ids ? [...g.member_ids] : [];
+          if (!mIds.includes(newStudentId)) {
+            mIds.push(newStudentId);
+          }
+          const updatedG = { ...g, member_ids: mIds, updated_at: now };
+          cloudUpsert('groups', updatedG, ['college', 'course', 'mentor', 'leader', 'members', 'project']);
+          return updatedG;
+        }
+        return g;
+      }));
+    }
 
     // Automatically create payment record for fee management
     const newPayment: StudentPayment = {
@@ -1903,8 +1955,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         payments: visiblePayments,
         staffMembers,
         stats,
-        allStudents: enrichedStudents,
-        allGroups: enrichedGroups,
+        allStudents: currentUser.role === 'admin' ? enrichedStudents : visibleStudents,
+        allGroups: currentUser.role === 'admin' ? enrichedGroups : visibleGroups,
         addCollege,
         deleteCollege,
         addCourse,
