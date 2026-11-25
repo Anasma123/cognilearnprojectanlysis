@@ -185,7 +185,7 @@ export default function ProjectsPage() {
 
       const computed = isCompleted ? 100 : calculateComputedProgress(
         milestones.filter(m => m.project_id === projectToEdit.id),
-        tasks.filter(t => t.project_id === projectToEdit.id),
+        tasks.filter(t => t.project_id === projectToEdit.id || (projectToEdit.group_id && t.group_id === projectToEdit.group_id)),
         editForm.presentations,
         editForm.lifecycle_phases,
         editForm.status
@@ -735,7 +735,7 @@ export default function ProjectsPage() {
                             ? editForm.progress_percentage
                             : calculateComputedProgress(
                                 milestones.filter(m => m.project_id === projectToEdit.id),
-                                tasks.filter(t => t.project_id === projectToEdit.id),
+                                tasks.filter(t => t.project_id === projectToEdit.id || (projectToEdit.group_id && t.group_id === projectToEdit.group_id)),
                                 editForm.presentations,
                                 editForm.lifecycle_phases,
                                 editForm.status

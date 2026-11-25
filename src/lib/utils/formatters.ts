@@ -54,8 +54,14 @@ export function calculateComputedProgress(
   lifecyclePhases?: { planning?: boolean; design?: boolean; development?: boolean; testing?: boolean },
   lifecycleStatus?: string
 ): number {
-  // 1. Calculate phase score from the 4 lifecycle phases (planning, design, development, testing)
-  // Each phase carries exactly 25% weight (1 = 25%, 2 = 50%, 3 = 75%, 4 = 100%)
+  const normStatus = String(lifecycleStatus || '').toLowerCase();
+
+  // 1. If status is explicitly completed, progress is 100%
+  if (normStatus === 'completed') {
+    return 100;
+  }
+
+  // 2. Lifecycle Phases (planning, design, development, testing)
   const phases = lifecyclePhases || {};
   const phaseFlags = [
     Boolean(phases.planning),
@@ -64,60 +70,112 @@ export function calculateComputedProgress(
     Boolean(phases.testing)
   ];
   const completedPhasesCount = phaseFlags.filter(Boolean).length;
-  const allPhasesDone = completedPhasesCount === 4;
+  if (completedPhasesCount === 4) {
+    return 100;
+  }
+  const phaseScore = completedPhasesCount * 25; // 0, 25, 50, 75
 
-  // If status is explicitly completed OR all 4 phases are verified, project progress is 100%
-  if (lifecycleStatus === 'completed' || allPhasesDone) {
+  // 3. Milestones Calculation (Completed = 100%, In Progress = 50%)
+  const totalMilestones = Array.isArray(milestones) ? milestones.length : 0;
+  let milestoneScore = 0;
+  let hasMilestones = false;
+  if (totalMilestones > 0) {
+    hasMilestones = true;
+    const completedM = milestones.filter(m => m && m.status === 'completed').length;
+    const inProgressM = milestones.filter(m => m && m.status === 'in_progress').length;
+    milestoneScore = Math.min(100, Math.round(((completedM + inProgressM * 0.5) / totalMilestones) * 100));
+  }
+
+  // 4. Tasks Calculation (Completed = 100%, Under Review = 75%, In Progress = 50%)
+  const totalTasks = Array.isArray(tasks) ? tasks.length : 0;
+  let taskScore = 0;
+  let hasTasks = false;
+  if (totalTasks > 0) {
+    hasTasks = true;
+    const completedT = tasks.filter(t => t && t.status === 'completed').length;
+    const underReviewT = tasks.filter(t => t && t.status === 'under_review').length;
+    const inProgressT = tasks.filter(t => t && t.status === 'in_progress').length;
+    taskScore = Math.min(100, Math.round(((completedT + underReviewT * 0.75 + inProgressT * 0.5) / totalTasks) * 100));
+  }
+
+  // 5. Presentations Score (Completed = 100%, Revision Required = 50%)
+  const hasPresentations = Array.isArray(presentations) && presentations.length > 0;
+  let presScore = 0;
+  if (hasPresentations) {
+    let totalPresScore = 0;
+    presentations.forEach(p => {
+      if (p.status === 'completed') totalPresScore += 100;
+      else if (p.status === 'revision_required') totalPresScore += 50;
+    });
+    presScore = Math.round(totalPresScore / presentations.length);
+  }
+
+  // 6. Objective Blended Progress Calculation
+  let computed = 0;
+
+  if (hasMilestones && hasTasks) {
+    if (phaseScore > 0 && hasPresentations) {
+      // Milestones 35%, Tasks 30%, Phases 20%, Presentations 15%
+      computed = milestoneScore * 0.35 + taskScore * 0.30 + phaseScore * 0.20 + presScore * 0.15;
+    } else if (phaseScore > 0) {
+      // Milestones 40%, Tasks 35%, Phases 25%
+      computed = milestoneScore * 0.40 + taskScore * 0.35 + phaseScore * 0.25;
+    } else if (hasPresentations) {
+      // Milestones 45%, Tasks 40%, Presentations 15%
+      computed = milestoneScore * 0.45 + taskScore * 0.40 + presScore * 0.15;
+    } else {
+      // Milestones 55%, Tasks 45%
+      computed = milestoneScore * 0.55 + taskScore * 0.45;
+    }
+  } else if (hasMilestones && !hasTasks) {
+    if (phaseScore > 0) {
+      computed = milestoneScore * 0.65 + phaseScore * 0.35;
+    } else if (hasPresentations) {
+      computed = milestoneScore * 0.80 + presScore * 0.20;
+    } else {
+      computed = milestoneScore;
+    }
+  } else if (!hasMilestones && hasTasks) {
+    if (phaseScore > 0) {
+      computed = taskScore * 0.65 + phaseScore * 0.35;
+    } else if (hasPresentations) {
+      computed = taskScore * 0.80 + presScore * 0.20;
+    } else {
+      computed = taskScore;
+    }
+  } else {
+    // Neither milestones nor tasks recorded yet
+    if (phaseScore > 0 && hasPresentations) {
+      computed = phaseScore * 0.75 + presScore * 0.25;
+    } else if (phaseScore > 0) {
+      computed = phaseScore;
+    } else if (hasPresentations) {
+      computed = presScore;
+    } else {
+      // Baseline status fallback
+      switch (normStatus) {
+        case 'design': computed = 25; break;
+        case 'develop':
+        case 'development':
+        case 'in_progress': computed = 50; break;
+        case 'test':
+        case 'testing': computed = 75; break;
+        default: computed = 0; break;
+      }
+    }
+  }
+
+  // If all milestones and tasks are 100% completed
+  if (
+    hasMilestones &&
+    milestoneScore === 100 &&
+    (!hasTasks || taskScore === 100) &&
+    (!hasPresentations || presScore === 100)
+  ) {
     return 100;
   }
 
-  const phaseScore = completedPhasesCount * 25;
-  const hasPresentations = Boolean(presentations && presentations.length > 0);
-
-  // If no presentations recorded yet, progress is strictly the 4 lifecycle phases (25% each)
-  if (!hasPresentations) {
-    if (phaseScore > 0) return phaseScore;
-
-    // Fallback baseline from lifecycle status string if no phases checked yet
-    switch (String(lifecycleStatus).toLowerCase()) {
-      case 'design': return 25;
-      case 'develop':
-      case 'development': return 50;
-      case 'test':
-      case 'testing': return 75;
-      case 'completed': return 100;
-      case 'planning':
-      default: return 0;
-    }
-  }
-
-  // 2. Presentations score calculation
-  // Completed = 100%, Revision Required = 50%, Scheduled = 0%
-  let totalPresScore = 0;
-  presentations.forEach(p => {
-    if (p.status === 'completed') {
-      totalPresScore += 100;
-    } else if (p.status === 'revision_required') {
-      totalPresScore += 50;
-    } else {
-      totalPresScore += 0; // scheduled
-    }
-  });
-  const avgPresScore = Math.round(totalPresScore / presentations.length);
-
-  // If presentations exist:
-  // Completed presentation confirms readiness for current stage
-  if (avgPresScore === 100) {
-    if (phaseScore >= 75) return 100;
-    return Math.min(100, Math.max(phaseScore, Math.round(phaseScore * 0.75 + avgPresScore * 0.25)));
-  }
-
-  if (phaseScore > 0) {
-    const combined = phaseScore * 0.75 + avgPresScore * 0.25;
-    return Math.min(100, Math.max(0, Math.round(combined)));
-  }
-
-  return avgPresScore;
+  return Math.min(100, Math.max(0, Math.round(computed)));
 }
 
 /**

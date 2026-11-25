@@ -15,19 +15,35 @@ import {
   Legend
 } from 'recharts';
 import { useApp } from '@/lib/context/AppContext';
+import { calculateComputedProgress } from '@/lib/utils/formatters';
 
 export function AnalyticsCharts() {
-  const { projects, groups, attendance } = useApp();
+  const { projects, groups, milestones, tasks, attendance } = useApp();
 
   // 1. Group-wise progress comparison data
   const progressData = useMemo(() => {
     if (groups && groups.length > 0) {
       return groups.map(g => {
         const proj = projects.find(p => p && p.group_id === g.id) || g.project;
+        let progress = proj?.progress_percentage;
+
+        // If progress is undefined or project not yet enriched, compute on the fly
+        if (progress === undefined) {
+          const gMilestones = (milestones || []).filter(m => m && proj && m.project_id === proj.id);
+          const gTasks = (tasks || []).filter(t => t && (t.group_id === g.id || (proj && t.project_id === proj.id)));
+          progress = calculateComputedProgress(
+            gMilestones,
+            gTasks,
+            proj?.presentations,
+            proj?.lifecycle_phases,
+            proj?.status
+          );
+        }
+
         return {
           name: g.group_code || g.name,
           title: proj?.title || g.project_title || g.name,
-          progress: proj?.progress_percentage ?? 0
+          progress: progress ?? 0
         };
       });
     }
@@ -39,7 +55,7 @@ export function AnalyticsCharts() {
         progress: p.progress_percentage ?? 0
       };
     });
-  }, [groups, projects]);
+  }, [groups, projects, milestones, tasks]);
 
   const termAvg = useMemo(() => {
     if (progressData.length === 0) return 0;

@@ -1610,7 +1610,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updated.manual_progress_override = false;
       } else if (!updated.manual_progress_override) {
         const pMilestones = milestones.filter(m => m.project_id === id);
-        const pTasks = tasks.filter(t => t.project_id === id);
+        const pTasks = tasks.filter(t => t.project_id === id || (updated.group_id && t.group_id === updated.group_id));
         updated.progress_percentage = calculateComputedProgress(
           pMilestones,
           pTasks,
