@@ -757,7 +757,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                     <div>
                       <span className="font-bold text-slate-900">{att.student?.full_name || 'Student'}</span>
                       <p className="text-[11px] text-slate-500">
-                        {formatDateIndian(att.date)} • {att.session_type}
+                        {formatDateIndian(att.date)}
                       </p>
                     </div>
 
@@ -877,7 +877,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                   <span className="font-bold text-slate-900">{m.full_name}</span>
 
                   <div className="flex items-center gap-1">
-                    {(['present', 'absent', 'late'] as const).map((st) => (
+                    {(['present', 'absent', 'leave'] as const).map((st) => (
                       <button
                         key={st}
                         type="button"
@@ -885,7 +885,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                         className={`px-2 py-1 rounded text-[11px] font-bold uppercase ${
                           attendanceRecordsToday[m.id] === st
                             ? st === 'present' ? 'bg-emerald-600 text-white' :
-                              st === 'absent' ? 'bg-rose-600 text-white' : 'bg-amber-600 text-white'
+                              st === 'absent' ? 'bg-rose-600 text-white' : 'bg-blue-600 text-white'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >

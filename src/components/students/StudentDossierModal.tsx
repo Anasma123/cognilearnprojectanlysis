@@ -51,9 +51,9 @@ export function StudentDossierModal({ isOpen, onClose, student }: StudentDossier
 
   // Attendance calculation
   const totalSessions = studentAttendance.length;
-  const presentSessions = studentAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
-  const absentSessions = studentAttendance.filter(a => a.status === 'absent' || a.status === 'leave').length;
-  const lateSessions = studentAttendance.filter(a => a.status === 'late').length;
+  const presentSessions = studentAttendance.filter(a => a.status === 'present').length;
+  const absentSessions = studentAttendance.filter(a => a.status === 'absent').length;
+  const leaveSessions = studentAttendance.filter(a => a.status === 'leave').length;
   const attendancePercent = totalSessions > 0 ? Math.round((presentSessions / totalSessions) * 100) : 100;
   const isEligible = attendancePercent >= 75;
 
@@ -232,8 +232,8 @@ export function StudentDossierModal({ isOpen, onClose, student }: StudentDossier
               <span className="font-bold text-rose-600 text-sm">{absentSessions} Days</span>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-              <span className="text-[10px] text-amber-500 font-medium block">Recorded Late</span>
-              <span className="font-bold text-amber-700 text-sm">{lateSessions} Days</span>
+              <span className="text-[10px] text-blue-500 font-medium block">Leave Days</span>
+              <span className="font-bold text-blue-700 text-sm">{leaveSessions} Days</span>
             </div>
           </div>
 

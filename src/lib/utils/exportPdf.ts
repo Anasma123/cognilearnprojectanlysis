@@ -165,16 +165,16 @@ export function generateStudentProfilePdf(student: Student, options?: Comprehens
   doc.text('2. Laboratory & Sprint Attendance Audit:', 14, currentY);
 
   const totalSessions = attendanceRecords.length;
-  const presentDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
-  const absentDays = attendanceRecords.filter(a => a.status === 'absent' || a.status === 'leave').length;
-  const lateDays = attendanceRecords.filter(a => a.status === 'late').length;
+  const presentDays = attendanceRecords.filter(a => a.status === 'present').length;
+  const absentDays = attendanceRecords.filter(a => a.status === 'absent').length;
+  const leaveDays = attendanceRecords.filter(a => a.status === 'leave').length;
   const attendanceRate = totalSessions > 0 ? Math.round((presentDays / totalSessions) * 100) : 100;
   const academicClearance = attendanceRate >= 75 ? 'ELIGIBLE FOR SUBMISSION' : 'ATTENDANCE SHORTAGE';
 
   const attendanceData = [
     ['Total Sessions Logged', String(totalSessions), 'Attendance Rate', `${attendanceRate}%`],
     ['Present Days', String(presentDays), 'Absent Days', String(absentDays)],
-    ['Recorded Late', String(lateDays), 'Academic Clearance', academicClearance]
+    ['Approved Leave', String(leaveDays), 'Academic Clearance', academicClearance]
   ];
 
   autoTable(doc, {
@@ -637,23 +637,22 @@ export function generateAttendancePdf(records: AttendanceRecord[], groupName = '
     formatDateIndian(r.date),
     r.student?.student_reg_no || '-',
     r.student?.full_name || '-',
-    r.session_type === 'daily' ? 'Daily' : 'Meeting',
     r.status.toUpperCase(),
     r.remarks || '-'
   ]);
 
   autoTable(doc, {
     startY: 50,
-    head: [['#', 'Date', 'Reg No', 'Student Name', 'Session', 'Status', 'Remarks']],
+    head: [['#', 'Date', 'Reg No', 'Student Name', 'Status', 'Remarks']],
     body: rows,
     theme: 'striped',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
     styles: { fontSize: 8 },
     didParseCell: (data) => {
-      if (data.column.index === 5) {
+      if (data.column.index === 4) {
         if (data.cell.raw === 'PRESENT') data.cell.styles.textColor = [16, 185, 129];
         else if (data.cell.raw === 'ABSENT') data.cell.styles.textColor = [239, 68, 68];
-        else if (data.cell.raw === 'LATE') data.cell.styles.textColor = [245, 158, 11];
+        else if (data.cell.raw === 'LEAVE') data.cell.styles.textColor = [59, 130, 246];
       }
     }
   });

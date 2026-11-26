@@ -60,7 +60,6 @@ export function exportAttendanceToExcel(records: AttendanceRecord[], filename = 
     'Reg No': r.student?.student_reg_no || '-',
     'Student Name': r.student?.full_name || '-',
     'Class / Course': r.student?.class_year || '-',
-    'Session': r.session_type === 'daily' ? 'Daily Lab' : 'Project Meeting',
     'Attendance Status': r.status.toUpperCase(),
     'Remarks / Audit Note': r.remarks || '-'
   }));

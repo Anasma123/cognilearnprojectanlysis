@@ -99,19 +99,17 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
   // Compute live counter for displayed students
   const counts = useMemo(() => {
     let present = 0;
-    let late = 0;
     let absent = 0;
     let leave = 0;
 
     filteredStudents.forEach(s => {
       const st = studentStates[s.id]?.status || 'present';
       if (st === 'present') present++;
-      else if (st === 'late') late++;
       else if (st === 'absent') absent++;
       else if (st === 'leave') leave++;
     });
 
-    return { total: filteredStudents.length, present, late, absent, leave };
+    return { total: filteredStudents.length, present, absent, leave };
   }, [filteredStudents, studentStates]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -207,9 +205,6 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
               <Check className="w-3 h-3" /> {counts.present} Present
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-semibold border border-amber-200">
-              <Clock className="w-3 h-3" /> {counts.late} Late
-            </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 font-semibold border border-rose-200">
               <X className="w-3 h-3" /> {counts.absent} Absent
             </span>
@@ -271,7 +266,7 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
                       <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 truncate">
                         {group ? (
                           <span className="text-blue-700 font-semibold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100 truncate">
-                            {group.name} ({group.group_code})
+                            {group.name}
                           </span>
                         ) : (
                           <span className="text-slate-400 font-normal">Unassigned</span>
@@ -295,19 +290,6 @@ export function AttendanceMarkerModal({ isOpen, onClose }: AttendanceMarkerModal
                     >
                       <Check className="w-3.5 h-3.5" />
                       Present
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(student.id, 'late')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                        current.status === 'late'
-                          ? 'bg-amber-600 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      <Clock className="w-3.5 h-3.5" />
-                      Late
                     </button>
 
                     <button
