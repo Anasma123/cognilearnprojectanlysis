@@ -17,7 +17,6 @@ import {
   UserCog,
   FileText,
   FileBarChart,
-  Bell,
   Settings,
   ShieldCheck,
   LogOut,
@@ -133,14 +132,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       badge: null,
       roles: ['admin', 'staff', 'mentor'],
       permKey: 'export_reports'
-    },
-    {
-      title: 'Notifications',
-      href: '/notifications',
-      icon: Bell,
-      badge: unreadCount > 0 ? `${unreadCount}` : null,
-      badgeAlert: unreadCount > 0,
-      roles: ['admin', 'staff', 'mentor', 'student']
     },
     {
       title: 'Settings & Database',

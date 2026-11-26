@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Menu,
-  Bell,
   LogOut,
   KeyRound,
   RefreshCw
@@ -19,24 +18,9 @@ interface TopNavProps {
 
 export function TopNav({ onToggleSidebar }: TopNavProps) {
   const router = useRouter();
-  const { currentUser, notifications, markAllNotificationsRead, logout, isCloudConnected, isSyncing, forceCloudSync } = useApp();
+  const { currentUser, logout, isCloudConnected, isSyncing, forceCloudSync } = useApp();
 
-  const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showChangePassModal, setShowChangePassModal] = useState(false);
-
-  const notifMenuRef = useRef<HTMLDivElement>(null);
-  const unreadNotifications = notifications.filter(n => !n.is_read);
-
-  // Close notifications menu on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target as Node)) {
-        setShowNotifMenu(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
@@ -105,54 +89,6 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
             <span className={`uppercase font-black text-[11px] tracking-wide ${currentUser.role === 'admin' ? 'text-purple-700' : 'text-blue-700'}`}>
               {currentUser.role === 'admin' ? 'Administrator' : currentUser.role === 'staff' ? 'Staff Coordinator' : currentUser.role}
             </span>
-          </div>
-
-          {/* Notifications Popover */}
-          <div className="relative" ref={notifMenuRef}>
-            <button
-              onClick={() => setShowNotifMenu(!showNotifMenu)}
-              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 relative focus:outline-none transition-colors border border-slate-200/80 cursor-pointer"
-              aria-label="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-              {unreadNotifications.length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              )}
-            </button>
-
-            {showNotifMenu && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in-50 zoom-in-95">
-                <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold text-slate-900">Notifications</h3>
-                    <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-full">
-                      {unreadNotifications.length} new
-                    </span>
-                  </div>
-                  {unreadNotifications.length > 0 && (
-                    <button
-                      onClick={() => markAllNotificationsRead()}
-                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-
-                <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-400">No notifications</div>
-                  ) : (
-                    notifications.slice(0, 5).map((n) => (
-                      <div key={n.id} className="p-3 text-xs hover:bg-slate-50 transition-colors">
-                        <p className="font-bold text-slate-900">{n.title}</p>
-                        <p className="text-slate-500 text-[11px] mt-0.5">{n.message}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Change Password Button */}

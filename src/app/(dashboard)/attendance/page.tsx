@@ -49,17 +49,27 @@ export default function AttendancePage() {
   const [editStatus, setEditStatus] = useState<AttendanceStatus>('present');
   const [editRemarks, setEditRemarks] = useState('');
 
-  // Month navigation helpers
+  // Month navigation helpers (pure calendar arithmetic, immune to timezones)
   const handlePrevMonth = () => {
     const [y, m] = selectedMonth.split('-').map(Number);
-    const prevDate = new Date(y, m - 2, 1);
-    setSelectedMonth(prevDate.toISOString().slice(0, 7));
+    let prevY = y;
+    let prevM = m - 1;
+    if (prevM < 1) {
+      prevY -= 1;
+      prevM = 12;
+    }
+    setSelectedMonth(`${prevY}-${String(prevM).padStart(2, '0')}`);
   };
 
   const handleNextMonth = () => {
     const [y, m] = selectedMonth.split('-').map(Number);
-    const nextDate = new Date(y, m, 1);
-    setSelectedMonth(nextDate.toISOString().slice(0, 7));
+    let nextY = y;
+    let nextM = m + 1;
+    if (nextM > 12) {
+      nextY += 1;
+      nextM = 1;
+    }
+    setSelectedMonth(`${nextY}-${String(nextM).padStart(2, '0')}`);
   };
 
   const handleCurrentMonth = () => {
@@ -391,22 +401,24 @@ export default function AttendancePage() {
               Select Month:
             </span>
 
-            <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1">
+            <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-2xs">
               <button
+                type="button"
                 onClick={handlePrevMonth}
-                className="p-1.5 hover:bg-white hover:text-blue-600 rounded-lg text-slate-600 transition-colors"
+                className="p-1.5 hover:bg-white hover:text-blue-600 rounded-lg text-slate-600 transition-colors cursor-pointer"
                 title="Previous Month"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
 
-              <div className="px-3 py-1 text-xs font-black text-slate-900 tracking-tight min-w-[130px] text-center">
+              <div className="px-3 py-1 text-xs font-black text-slate-900 tracking-tight min-w-[130px] text-center select-none">
                 {monthDisplayTitle}
               </div>
 
               <button
+                type="button"
                 onClick={handleNextMonth}
-                className="p-1.5 hover:bg-white hover:text-blue-600 rounded-lg text-slate-600 transition-colors"
+                className="p-1.5 hover:bg-white hover:text-blue-600 rounded-lg text-slate-600 transition-colors cursor-pointer"
                 title="Next Month"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -417,12 +429,13 @@ export default function AttendancePage() {
               type="month"
               value={selectedMonth}
               onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
-              className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
             />
 
             <button
+              type="button"
               onClick={handleCurrentMonth}
-              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors"
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
             >
               Current Month
             </button>
