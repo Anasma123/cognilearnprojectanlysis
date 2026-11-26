@@ -197,9 +197,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 COGNILEARN
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </span>
-              <span className="text-[11px] font-medium text-slate-400 tracking-wider uppercase">
-                MES College Portal
-              </span>
             </div>
           </div>
 

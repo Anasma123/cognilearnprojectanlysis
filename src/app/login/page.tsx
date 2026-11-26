@@ -72,7 +72,7 @@ export default function LoginPage() {
             COGNILEARN
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            MES College Academic Project Tracking & Monitoring System
+            Academic Project Tracking & Monitoring System
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center pt-2 border-t border-slate-100 text-[11px] text-slate-400">
-          Cognilearn Academic Office Portal • MES College Edition
+          Cognilearn Academic Office Portal
         </div>
       </div>
     </div>

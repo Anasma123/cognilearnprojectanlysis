@@ -850,6 +850,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [enrichedProjects, visibleGroups, currentUser]);
 
+  const visibleMilestones = useMemo(() => {
+    if (currentUser.role === 'admin') return milestones;
+    const allowedProjectIds = new Set(visibleProjects.map(p => p.id));
+    return milestones.filter(m => m.project_id && allowedProjectIds.has(m.project_id));
+  }, [milestones, visibleProjects, currentUser]);
+
   const visibleTasks = useMemo(() => {
     if (currentUser.role === 'admin') return enrichedTasks;
     const allowedGroupIds = new Set(visibleGroups.map(g => g.id));
@@ -1972,7 +1978,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         students: visibleStudents,
         groups: visibleGroups,
         projects: visibleProjects,
-        milestones,
+        milestones: visibleMilestones,
         tasks: visibleTasks,
         weeklyReports: visibleWeeklyReports,
         attendance: visibleAttendance,

@@ -139,9 +139,6 @@ export function TopNav({ onToggleSidebar }: TopNavProps) {
               <span className="font-black text-sm tracking-tight text-slate-900 leading-none">
                 COGNILEARN
               </span>
-              <span className="text-[10px] font-semibold text-blue-600 tracking-wider uppercase mt-0.5">
-                MES College Portal
-              </span>
             </div>
           </Link>
         </div>
