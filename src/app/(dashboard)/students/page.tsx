@@ -8,6 +8,7 @@ import { exportStudentsToExcel } from '@/lib/utils/exportExcel';
 import { generateStudentProfilePdf } from '@/lib/utils/exportPdf';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { StudentModal } from '@/components/students/StudentModal';
+import { StudentDossierModal } from '@/components/students/StudentDossierModal';
 import {
   Search,
   Plus,
@@ -332,83 +333,11 @@ export default function StudentsPage() {
       />
 
       {/* View Student Dossier Modal */}
-      {viewingStudent && (
-        <Modal
-          isOpen={true}
-          onClose={() => setViewingStudent(null)}
-          title={`Student Profile: ${viewingStudent.full_name}`}
-          subtitle={`Register Number: ${viewingStudent.student_reg_no}`}
-          maxWidth="2xl"
-        >
-          <div className="space-y-6">
-            <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <img
-                src={viewingStudent.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                alt={viewingStudent.full_name}
-                className="w-16 h-16 rounded-full object-cover ring-2 ring-blue-500"
-              />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900">{viewingStudent.full_name}</h3>
-                  <StatusBadge status={viewingStudent.status} />
-                </div>
-                <p className="text-xs text-blue-700 font-semibold">{viewingStudent.assigned_role}</p>
-                <p className="text-xs text-slate-500 mt-1">{viewingStudent.college?.name || 'MES College'}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Email</span>
-                <span className="font-semibold text-slate-800">{viewingStudent.email}</span>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Phone</span>
-                <span className="font-semibold text-slate-800">{viewingStudent.phone || 'N/A'}</span>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Course & Department</span>
-                <span className="font-semibold text-slate-800">{viewingStudent.course?.name || viewingStudent.department || 'N/A'}</span>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Class / Academic Year</span>
-                <span className="font-semibold text-slate-800">{viewingStudent.class_year}</span>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Assigned Group</span>
-                <span className="font-semibold text-blue-700">{viewingStudent.group?.name || groups.find(g => g.id === viewingStudent.group_id)?.name || 'Unassigned'}</span>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-slate-200">
-                <span className="text-slate-400 block font-medium">Joining Date</span>
-                <span className="font-semibold text-slate-800">{formatDateIndian(viewingStudent.joining_date)}</span>
-              </div>
-            </div>
-
-            {viewingStudent.notes && (
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs">
-                <span className="font-bold text-amber-900 block mb-1">Mentor Remarks & Skills:</span>
-                <p className="text-amber-800 leading-relaxed">{viewingStudent.notes}</p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-              <button
-                onClick={() => handleDownloadStudentPdf(viewingStudent)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
-              >
-                <FileDown className="w-4 h-4" />
-                Generate Student Profile PDF
-              </button>
-              <button
-                onClick={() => setViewingStudent(null)}
-                className="px-4 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <StudentDossierModal
+        isOpen={!!viewingStudent}
+        onClose={() => setViewingStudent(null)}
+        student={viewingStudent}
+      />
 
       {/* Delete Confirmation Modal */}
       {studentToDelete && (

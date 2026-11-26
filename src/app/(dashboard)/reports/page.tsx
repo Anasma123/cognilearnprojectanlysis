@@ -21,10 +21,12 @@ import {
   generateFilteredStudentsPdf,
   generateComprehensiveGroupDossierPdf
 } from '@/lib/utils/exportPdf';
-import { Group } from '@/lib/types';
+import { Group, Student, Project } from '@/lib/types';
 import { formatCurrencyIndian, formatDateIndian } from '@/lib/utils/formatters';
 import { Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { StudentDossierModal } from '@/components/students/StudentDossierModal';
+import { ProjectPortfolioModal } from '@/components/projects/ProjectPortfolioModal';
 import {
   FileBarChart,
   FileSpreadsheet,
@@ -74,6 +76,12 @@ export default function ReportsPage() {
 
   // Comprehensive Group Dossier Modal State
   const [selectedGroupDossier, setSelectedGroupDossier] = useState<Group | null>(null);
+
+  // Comprehensive Student Dossier Modal State
+  const [selectedStudentDossier, setSelectedStudentDossier] = useState<Student | null>(null);
+
+  // Comprehensive Project Portfolio Modal State
+  const [selectedProjectPortfolio, setSelectedProjectPortfolio] = useState<Project | null>(null);
 
   const handleDownloadGroupDossier = (grp: Group) => {
     const prj = collegeProjects.find(p => p.group_id === grp.id) || grp.project;
@@ -940,28 +948,39 @@ export default function ReportsPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const prj = collegeProjects.find(p => p.group_id === grp?.id) || projects.find(p => p.group_id === grp?.id);
-                              const stAttendance = collegeAttendance.filter(a => a.student_id === s.id);
-                              const stTasks = tasks.filter(t => t.assigned_student_id === s.id || (grp && t.group_id === grp.id));
-                              const staffName = grp?.coordinator_name || grp?.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
-                              generateStudentProfilePdf(s, {
-                                group: grp,
-                                project: prj,
-                                payment: pay,
-                                attendanceRecords: stAttendance,
-                                tasks: stTasks,
-                                staffInChargeName: staffName
-                              });
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            title="Download Official Student Profile PDF"
-                          >
-                            <FileDown className="w-3.5 h-3.5" />
-                            Single PDF
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStudentDossier(s)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="View Student Academic & Financial Dossier"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prj = collegeProjects.find(p => p.group_id === grp?.id) || projects.find(p => p.group_id === grp?.id);
+                                const stAttendance = collegeAttendance.filter(a => a.student_id === s.id);
+                                const stTasks = tasks.filter(t => t.assigned_student_id === s.id || (grp && t.group_id === grp.id));
+                                const staffName = grp?.coordinator_name || grp?.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
+                                generateStudentProfilePdf(s, {
+                                  group: grp,
+                                  project: prj,
+                                  payment: pay,
+                                  attendanceRecords: stAttendance,
+                                  tasks: stTasks,
+                                  staffInChargeName: staffName
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="Download Official Student Profile PDF"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                              Single PDF
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1072,26 +1091,37 @@ export default function ReportsPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const prjStudents = students.filter(st => st.group_id === grp?.id || (grp?.member_ids || []).includes(st.id));
-                              const prjTasks = tasks.filter(t => t.project_id === p.id || (grp && t.group_id === grp.id));
-                              const prjDocs = documents.filter(d => d.project_id === p.id || (grp && d.group_id === grp.id));
-                              const staffName = grp?.coordinator_name || grp?.mentor?.full_name || p.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === p.mentor_id)?.full_name || 'Staff Coordinator';
-                              generateFinalProjectReportPdf(p, grp, evalRecord, {
-                                students: prjStudents,
-                                tasks: prjTasks,
-                                documents: prjDocs,
-                                staffInChargeName: staffName
-                              });
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            title="Download Final Project Dissertation PDF"
-                          >
-                            <FileDown className="w-3.5 h-3.5" />
-                            Project PDF
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProjectPortfolio(p)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="View Project Architecture & Dissertation Portfolio"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prjStudents = students.filter(st => st.group_id === grp?.id || (grp?.member_ids || []).includes(st.id));
+                                const prjTasks = tasks.filter(t => t.project_id === p.id || (grp && t.group_id === grp.id));
+                                const prjDocs = documents.filter(d => d.project_id === p.id || (grp && d.group_id === grp.id));
+                                const staffName = grp?.coordinator_name || grp?.mentor?.full_name || p.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === p.mentor_id)?.full_name || 'Staff Coordinator';
+                                generateFinalProjectReportPdf(p, grp, evalRecord, {
+                                  students: prjStudents,
+                                  tasks: prjTasks,
+                                  documents: prjDocs,
+                                  staffInChargeName: staffName
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="Download Final Project Dissertation PDF"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                              Project PDF
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1781,6 +1811,20 @@ export default function ReportsPage() {
           </Modal>
         );
       })()}
+
+      {/* Comprehensive Student Dossier Modal */}
+      <StudentDossierModal
+        isOpen={!!selectedStudentDossier}
+        onClose={() => setSelectedStudentDossier(null)}
+        student={selectedStudentDossier}
+      />
+
+      {/* Comprehensive Project Portfolio Modal */}
+      <ProjectPortfolioModal
+        isOpen={!!selectedProjectPortfolio}
+        onClose={() => setSelectedProjectPortfolio(null)}
+        project={selectedProjectPortfolio}
+      />
     </div>
   );
 }

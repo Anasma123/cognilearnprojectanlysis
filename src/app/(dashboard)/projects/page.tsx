@@ -7,9 +7,11 @@ import { formatDateIndian, calculateComputedProgress } from '@/lib/utils/formatt
 import { generateFinalProjectReportPdf } from '@/lib/utils/exportPdf';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
+import { ProjectPortfolioModal } from '@/components/projects/ProjectPortfolioModal';
 import {
   FolderKanban,
   Edit,
+  Eye,
   FileDown,
   ExternalLink,
   Github,
@@ -404,6 +406,13 @@ export default function ProjectsPage() {
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}
+                      <button
+                        onClick={() => setViewingProject(project)}
+                        title="View Project Architecture & Portfolio"
+                        className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => {
                           const prjStudents = (students || []).filter(s => s.group_id === group?.id || (group?.member_ids || []).includes(s.id));
@@ -1009,6 +1018,12 @@ export default function ProjectsPage() {
           </div>
         </Modal>
       )}
+      {/* View Project Portfolio Modal */}
+      <ProjectPortfolioModal
+        isOpen={!!viewingProject}
+        onClose={() => setViewingProject(null)}
+        project={viewingProject}
+      />
     </div>
   );
 }

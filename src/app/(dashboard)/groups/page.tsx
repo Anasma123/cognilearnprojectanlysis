@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function GroupsPage() {
-  const { groups, projects, weeklyReports, deleteGroup, currentUser } = useApp();
+  const { groups, projects, weeklyReports, colleges, deleteGroup, currentUser } = useApp();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [groupToEdit, setGroupToEdit] = useState<Group | null>(null);
@@ -113,7 +113,7 @@ export default function GroupsPage() {
                 <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">College:</span>
-                    <span className="font-semibold text-slate-800">{group.college?.code || group.college?.name || 'General'}</span>
+                    <span className="font-semibold text-slate-800">{group.college?.name || colleges.find(c => c.id === group.college_id)?.name || 'MES College'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Staff In-Charge:</span>

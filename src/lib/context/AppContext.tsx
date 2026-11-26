@@ -1019,7 +1019,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newCol: College = {
       id: generateUUID(),
       name: trimmed,
-      code: code?.trim() || trimmed.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 8),
+      code: code?.trim() || (trimmed.includes(' ') ? trimmed.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 8) : trimmed.toUpperCase().slice(0, 8)),
       created_at: new Date().toISOString()
     };
     setColleges(prev => [...prev, newCol]);
