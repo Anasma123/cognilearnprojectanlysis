@@ -6,11 +6,19 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment, Task } from '../types';
-import { formatDateIndian, formatCurrencyIndian } from './formatters';
+import { formatDateIndian } from './formatters';
 
 const PRIMARY_COLOR: [number, number, number] = [15, 23, 42]; // Navy #0f172a
 const ACCENT_COLOR: [number, number, number] = [30, 64, 175]; // Blue #1e40af
 const TEXT_MUTED: [number, number, number] = [100, 116, 139];
+
+/**
+ * Standard PDF-safe currency formatter (uses 'Rs. ' instead of Unicode '₹' to prevent font encoding glitches)
+ */
+function formatCurrencyPdf(amount?: number | null): string {
+  if (amount === undefined || amount === null || isNaN(amount)) return 'Rs. 0';
+  return 'Rs. ' + Math.round(amount).toLocaleString('en-IN');
+}
 
 function addCognilearnHeader(doc: jsPDF, title: string, subtitle = 'Academic Project Tracking & Management System') {
   // Brand Header Bar
@@ -154,12 +162,17 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
   const staffName = staffInChargeName || group.coordinator_name || group.mentor?.full_name || 'Staff Coordinator';
 
   const phases = project?.lifecycle_phases;
-  const verifiedPhasesStr = [
-    phases?.planning ? 'Planning [✓]' : 'Planning [-]',
-    phases?.design ? 'Design [✓]' : 'Design [-]',
-    phases?.development ? 'Dev [✓]' : 'Dev [-]',
-    phases?.testing ? 'Test [✓]' : 'Test [-]'
-  ].join(' | ');
+  const verifiedCount = [phases?.planning, phases?.design, phases?.development, phases?.testing].filter(Boolean).length;
+  const verifiedPhasesStr = verifiedCount === 4
+    ? '4/4 Verified (All Phases Done)'
+    : verifiedCount > 0
+    ? `${verifiedCount}/4 Verified (${[
+        phases?.planning ? 'Plan' : '',
+        phases?.design ? 'Design' : '',
+        phases?.development ? 'Dev' : '',
+        phases?.testing ? 'Test' : ''
+      ].filter(Boolean).join(', ')})`
+    : '0/4 Verified (In Planning)';
 
   const infoRows = [
     ['Group Code', group.group_code, 'Cohort Status', statusStr],
@@ -176,7 +189,13 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: infoRows,
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 8 },
+    styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: {
+      0: { cellWidth: 26, fontStyle: 'bold' },
+      1: { cellWidth: 65 },
+      2: { cellWidth: 28, fontStyle: 'bold' },
+      3: { cellWidth: 63 }
+    }
   });
 
   // Resolve group members
@@ -207,7 +226,16 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: memberRows.length > 0 ? memberRows : [['-', '-', 'No student members registered yet', '-', '-', '-', '-']],
     theme: 'striped',
     headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
-    styles: { fontSize: 7.5 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 26 },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 32 },
+      4: { cellWidth: 42 },
+      5: { cellWidth: 20 },
+      6: { cellWidth: 16 }
+    }
   });
 
   // 3. Student Attendance Breakdown Table
@@ -245,7 +273,17 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: attendanceRows.length > 0 ? attendanceRows : [['-', 'No attendance records logged yet', '-', '0', '0', '0', '100%', 'ELIGIBLE']],
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 7.5 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 38 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 22, halign: 'center' },
+      5: { cellWidth: 22, halign: 'center' },
+      6: { cellWidth: 22, halign: 'center' },
+      7: { cellWidth: 28, halign: 'center', fontStyle: 'bold' }
+    }
   });
 
   // 4. Financial Ledger & Fee Payment Compliance Table
@@ -276,23 +314,23 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
       idx + 1,
       m.full_name,
       m.student_reg_no || '-',
-      formatCurrencyIndian(fee),
-      formatCurrencyIndian(paid),
-      formatCurrencyIndian(balance),
+      formatCurrencyPdf(fee),
+      formatCurrencyPdf(paid),
+      formatCurrencyPdf(balance),
       p?.last_payment_date ? formatDateIndian(p.last_payment_date) : '-',
       status
     ];
   });
 
   // Summary Row
-  const feeComplianceStatus = totalGroupBalance === 0 ? 'FULLY SETTLED' : `OUTSTANDING: ${formatCurrencyIndian(totalGroupBalance)}`;
+  const feeComplianceStatus = totalGroupBalance === 0 ? 'FULLY SETTLED' : `OUTSTANDING: ${formatCurrencyPdf(totalGroupBalance)}`;
   feeRows.push([
     '',
     'COHORT TOTALS',
     '',
-    formatCurrencyIndian(totalGroupFee),
-    formatCurrencyIndian(totalGroupPaid),
-    formatCurrencyIndian(totalGroupBalance),
+    formatCurrencyPdf(totalGroupFee),
+    formatCurrencyPdf(totalGroupPaid),
+    formatCurrencyPdf(totalGroupBalance),
     '',
     feeComplianceStatus
   ]);
@@ -303,7 +341,17 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: feeRows,
     theme: 'striped',
     headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
-    styles: { fontSize: 7.5 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 22, halign: 'right' },
+      4: { cellWidth: 22, halign: 'right' },
+      5: { cellWidth: 22, halign: 'right' },
+      6: { cellWidth: 22, halign: 'center' },
+      7: { cellWidth: 26, halign: 'center', fontStyle: 'bold' }
+    }
   });
 
   // 5. Sprint Tasks & Work Packages Table
@@ -334,7 +382,15 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: taskRows.length > 0 ? taskRows : [['-', 'No active sprint tasks registered', '-', '-', '-', '-']],
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 7.5 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 24, halign: 'center' },
+      5: { cellWidth: 22, halign: 'center' }
+    }
   });
 
   // 6. Chronological Weekly Progress Highlights
@@ -361,7 +417,14 @@ export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDos
     body: weeklyRows.length > 0 ? weeklyRows : [['-', '-', '-', 'No weekly review logs recorded yet.', '-']],
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 7.5 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: 34 },
+      2: { cellWidth: 24, halign: 'center' },
+      3: { cellWidth: 60 },
+      4: { cellWidth: 48 }
+    }
   });
 
   // 7. Academic Verification & Sign-Off Section
@@ -742,7 +805,7 @@ export function generateAutomatedGroupReportPdf(data: {
     ['Project Velocity', `${data.progressPercentage}% (${data.status.toUpperCase()})`, 'Attendance Rate', `${data.attendanceRate}%`],
     ['Project Code', data.projectCode || '-', 'Presentations', `${data.presentationsCount} Round(s)`],
     ['Tasks Completed', `${data.completedTasks} of ${data.totalTasks}`, 'Milestones Done', `${data.completedMilestones} of ${data.totalMilestones}`],
-    ['Fee Clearance', `Paid: ${formatCurrencyIndian(data.feePaid)} / Due: ${formatCurrencyIndian(data.feeBalance)}`, 'Mentor', data.mentorName || 'Assigned Mentor']
+    ['Fee Clearance', `Paid: ${formatCurrencyPdf(data.feePaid)} / Due: ${formatCurrencyPdf(data.feeBalance)}`, 'Mentor', data.mentorName || 'Assigned Mentor']
   ];
 
   autoTable(doc, {
@@ -876,7 +939,7 @@ export function generateAutomatedStudentReportPdf(data: {
     ['Full Name', data.studentName, 'Register No', data.regNo],
     ['Group Assigned', `${data.groupName} (${data.groupCode})`, 'Assigned Role', data.role || 'Member'],
     ['Department', data.department || '-', 'Attendance', `${data.attendanceRate}% (${data.attendedSessions}/${data.totalSessions} sessions)`],
-    ['Tasks Throughput', `${data.completedTasks} of ${data.totalTasks} Done`, 'Fee Standing', `${data.paymentStatus.toUpperCase()} (Bal: ${formatCurrencyIndian(data.feeBalance)})`]
+    ['Tasks Throughput', `${data.completedTasks} of ${data.totalTasks} Done`, 'Fee Standing', `${data.paymentStatus.toUpperCase()} (Bal: ${formatCurrencyPdf(data.feeBalance)})`]
   ];
 
   autoTable(doc, {
