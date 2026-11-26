@@ -851,10 +851,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [enrichedProjects, visibleGroups, currentUser]);
 
   const visibleMilestones = useMemo(() => {
-    if (currentUser.role === 'admin') return milestones;
+    const validProjectIds = new Set(enrichedProjects.map(p => p.id));
+    if (currentUser.role === 'admin') {
+      return milestones.filter(m => m.project_id && validProjectIds.has(m.project_id));
+    }
     const allowedProjectIds = new Set(visibleProjects.map(p => p.id));
     return milestones.filter(m => m.project_id && allowedProjectIds.has(m.project_id));
-  }, [milestones, visibleProjects, currentUser]);
+  }, [milestones, enrichedProjects, visibleProjects, currentUser]);
 
   const visibleTasks = useMemo(() => {
     if (currentUser.role === 'admin') return enrichedTasks;
@@ -1656,6 +1659,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const target = projects.find(p => p.id === id);
     setProjects(prev => prev.filter(p => p.id !== id));
     cloudDelete('projects', id);
+    const relatedMilestones = milestones.filter(m => m.project_id === id);
+    relatedMilestones.forEach(m => cloudDelete('project_milestones', m.id));
     setMilestones(prev => prev.filter(m => m.project_id !== id));
     setTasks(prev => prev.filter(t => t.project_id !== id));
     setEvaluations(prev => prev.filter(e => e.project_id !== id));
