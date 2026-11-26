@@ -661,6 +661,146 @@ export function generateAttendancePdf(records: AttendanceRecord[], groupName = '
   doc.save(`Attendance_Report_${groupName}.pdf`);
 }
 
+function addCognilearnLandscapeHeader(doc: jsPDF, title: string, subtitle = 'Academic Project Tracking & Management System') {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(...PRIMARY_COLOR);
+  doc.rect(0, 0, pageWidth, 24, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COGNILEARN', 14, 12);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('ACADEMIC PROJECT MONITORING & EVALUATION SYSTEM', 14, 18);
+
+  const dateStr = `Generated: ${formatDateIndian(new Date().toISOString())}`;
+  doc.setFontSize(8);
+  doc.text(dateStr, pageWidth - 14, 15, { align: 'right' });
+
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(title, 14, 33);
+
+  doc.setTextColor(...TEXT_MUTED);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(subtitle, 14, 38);
+
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.5);
+  doc.line(14, 41, pageWidth - 14, 41);
+}
+
+function addLandscapeReportFooter(doc: jsPDF) {
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      'Official Cognilearn Academic Record • Generated via MES College Portal',
+      14,
+      pageHeight - 8
+    );
+    doc.text(
+      `Page ${i} of ${pageCount}`,
+      pageWidth - 14,
+      pageHeight - 8,
+      { align: 'right' }
+    );
+  }
+}
+
+export function generateMonthlyAttendanceMatrixPdf(
+  monthTitle: string,
+  days: { dayStr: string; dateStr: string; weekdayShort: string }[],
+  students: Student[],
+  groups: Group[],
+  attendanceMap: Map<string, AttendanceRecord>,
+  filename?: string
+) {
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+  addCognilearnLandscapeHeader(
+    doc,
+    `MONTHLY ATTENDANCE MATRIX REGISTER: ${monthTitle.toUpperCase()}`,
+    `MES College • Cohort Attendance Audit & Compliance Telemetry`
+  );
+
+  const dayHeaders = days.map(d => `${d.dayStr}\n${d.weekdayShort}`);
+  const head = [['#', 'Reg No', 'Student Name', 'Group', ...dayHeaders, 'P', 'A', 'L', '%']];
+
+  const rows = students.map((s, idx) => {
+    const group = groups.find(g => g && g.id === s.group_id);
+    let pCount = 0;
+    let aCount = 0;
+    let lCount = 0;
+
+    const dayCells = days.map(d => {
+      const rec = attendanceMap.get(`${s.id}_${d.dateStr}`);
+      if (!rec) return '-';
+      if (rec.status === 'present') { pCount++; return 'P'; }
+      if (rec.status === 'absent') { aCount++; return 'A'; }
+      if (rec.status === 'leave') { lCount++; return 'L'; }
+      return '-';
+    });
+
+    const total = pCount + aCount + lCount;
+    const rate = total > 0 ? Math.round((pCount / total) * 100) : 100;
+
+    return [
+      idx + 1,
+      s.student_reg_no || '-',
+      s.full_name,
+      group ? group.name : '-',
+      ...dayCells,
+      pCount,
+      aCount,
+      lCount,
+      `${rate}%`
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 44,
+    head: head,
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255, fontSize: 6, halign: 'center', cellPadding: 1 },
+    styles: { fontSize: 6, cellPadding: 1, halign: 'center' },
+    columnStyles: {
+      0: { cellWidth: 7, halign: 'center' },
+      1: { cellWidth: 15, halign: 'left' },
+      2: { cellWidth: 26, halign: 'left' },
+      3: { cellWidth: 16, halign: 'left' }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index >= 4 && data.column.index < 4 + days.length) {
+        if (data.cell.raw === 'P') {
+          data.cell.styles.fillColor = [209, 250, 229];
+          data.cell.styles.textColor = [5, 150, 105];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.cell.raw === 'A') {
+          data.cell.styles.fillColor = [255, 228, 230];
+          data.cell.styles.textColor = [225, 29, 72];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.cell.raw === 'L') {
+          data.cell.styles.fillColor = [219, 234, 254];
+          data.cell.styles.textColor = [37, 99, 235];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    }
+  });
+
+  addLandscapeReportFooter(doc);
+  doc.save(filename || `Attendance_Matrix_${monthTitle.replace(/\s+/g, '_')}.pdf`);
+}
+
 /**
  * Generate Final Project Comprehensive Report PDF - Exhaustive Architecture & Dissertation Portfolio
  */

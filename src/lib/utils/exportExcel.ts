@@ -195,3 +195,61 @@ export function exportAutomatedStudentReportToExcel(rows: AutomatedStudentExport
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Student Performance');
   XLSX.writeFile(workbook, filename);
 }
+
+export function exportMonthlyAttendanceMatrixToExcel(
+  monthTitle: string,
+  days: { dayStr: string; dateStr: string; weekdayShort: string }[],
+  students: Student[],
+  groups: Group[],
+  attendanceMap: Map<string, AttendanceRecord>,
+  filename?: string
+) {
+  const data = students.map((s, index) => {
+    const group = groups.find(g => g && g.id === s.group_id);
+
+    let pCount = 0;
+    let aCount = 0;
+    let lCount = 0;
+
+    const row: Record<string, any> = {
+      'Sl. No': index + 1,
+      'Reg No': s.student_reg_no || '-',
+      'Student Name': s.full_name,
+      'Project Group': group ? group.name : 'Unassigned',
+    };
+
+    days.forEach(d => {
+      const rec = attendanceMap.get(`${s.id}_${d.dateStr}`);
+      const colHeader = `${d.dayStr} (${d.weekdayShort})`;
+      if (!rec) {
+        row[colHeader] = '-';
+      } else if (rec.status === 'present') {
+        row[colHeader] = 'P';
+        pCount++;
+      } else if (rec.status === 'absent') {
+        row[colHeader] = 'A';
+        aCount++;
+      } else if (rec.status === 'leave') {
+        row[colHeader] = 'L';
+        lCount++;
+      } else {
+        row[colHeader] = '-';
+      }
+    });
+
+    const total = pCount + aCount + lCount;
+    const rate = total > 0 ? Math.round((pCount / total) * 100) : 100;
+
+    row['Total Present (P)'] = pCount;
+    row['Total Absent (A)'] = aCount;
+    row['Total Leave (L)'] = lCount;
+    row['Attendance %'] = `${rate}%`;
+
+    return row;
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Matrix');
+  XLSX.writeFile(workbook, filename || `Attendance_Matrix_${monthTitle.replace(/\s+/g, '_')}.xlsx`);
+}

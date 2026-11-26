@@ -4,8 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '@/lib/context/AppContext';
 import { AttendanceRecord, AttendanceStatus } from '@/lib/types';
 import { formatDateIndian } from '@/lib/utils/formatters';
-import { exportAttendanceToExcel } from '@/lib/utils/exportExcel';
-import { generateAttendancePdf } from '@/lib/utils/exportPdf';
+import { exportAttendanceToExcel, exportMonthlyAttendanceMatrixToExcel } from '@/lib/utils/exportExcel';
+import { generateAttendancePdf, generateMonthlyAttendanceMatrixPdf } from '@/lib/utils/exportPdf';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { AttendanceMarkerModal } from '@/components/attendance/AttendanceMarkerModal';
 import { Modal } from '@/components/ui/Modal';
@@ -184,28 +184,25 @@ export default function AttendancePage() {
     });
   }, [students, attendance, selectedCollege]);
 
-  // Interactive one-click cell toggle (Present -> Absent -> Leave -> Present)
-  const handleCellToggle = (studentId: string, groupId: string | undefined, dateStr: string) => {
-    const key = `${studentId}_${dateStr}`;
-    const existing = attendanceMap.get(key);
+  // Download handlers for Monthly Matrix
+  const handleDownloadMatrixExcel = () => {
+    exportMonthlyAttendanceMatrixToExcel(
+      monthDisplayTitle,
+      daysInMonth,
+      filteredStudents,
+      groups,
+      attendanceMap
+    );
+  };
 
-    if (!existing) {
-      // Mark Present
-      markAttendanceBatch([{
-        student_id: studentId,
-        group_id: groupId,
-        date: dateStr,
-        status: 'present',
-        session_type: 'daily',
-        marked_by: currentUser?.id || 'admin'
-      }]);
-    } else if (existing.status === 'present') {
-      updateAttendance(existing.id, 'absent');
-    } else if (existing.status === 'absent') {
-      updateAttendance(existing.id, 'leave');
-    } else if (existing.status === 'leave') {
-      updateAttendance(existing.id, 'present');
-    }
+  const handleDownloadMatrixPdf = () => {
+    generateMonthlyAttendanceMatrixPdf(
+      monthDisplayTitle,
+      daysInMonth,
+      filteredStudents,
+      groups,
+      attendanceMap
+    );
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -264,21 +261,45 @@ export default function AttendancePage() {
             </button>
           </div>
 
-          <button
-            onClick={() => exportAttendanceToExcel(filteredRecords)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Excel Export
-          </button>
+          {viewMode === 'monthly' ? (
+            <>
+              <button
+                onClick={handleDownloadMatrixExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors shadow-xs"
+                title="Download this monthly matrix as an Excel spreadsheet (.xlsx)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                Download Matrix (Excel)
+              </button>
 
-          <button
-            onClick={() => generateAttendancePdf(filteredRecords, selectedGroup === 'ALL' ? 'MES All Cohorts' : 'Cohort', selectedDate || selectedMonth)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg border border-blue-200 transition-colors"
-          >
-            <FileDown className="w-4 h-4" />
-            PDF Report
-          </button>
+              <button
+                onClick={handleDownloadMatrixPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg border border-blue-200 transition-colors shadow-xs"
+                title="Download this monthly matrix as a PDF document"
+              >
+                <FileDown className="w-4 h-4 text-blue-600" />
+                Download Matrix (PDF)
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => exportAttendanceToExcel(filteredRecords)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Excel Export
+              </button>
+
+              <button
+                onClick={() => generateAttendancePdf(filteredRecords, selectedGroup === 'ALL' ? 'MES All Cohorts' : 'Cohort', selectedDate || selectedMonth)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg border border-blue-200 transition-colors"
+              >
+                <FileDown className="w-4 h-4" />
+                PDF Report
+              </button>
+            </>
+          )}
 
           {(currentUser.role === 'admin' || currentUser.role === 'staff' || currentUser.role === 'mentor') && (
             <button
@@ -507,9 +528,9 @@ export default function AttendancePage() {
             </div>
           ) : (
             <div className="flex items-end">
-              <div className="w-full px-3 py-2 bg-blue-50/70 border border-blue-100 rounded-lg text-[11px] text-blue-800 font-medium flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span>Click any box to cycle: <b>P</b> → <b>A</b> → <b>L</b></span>
+              <div className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 font-medium flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>Monthly Register Matrix • View-only display (use &apos;Mark Attendance Batch&apos; to record attendance)</span>
               </div>
             </div>
           )}
@@ -519,7 +540,7 @@ export default function AttendancePage() {
       {/* VIEW MODE 1: MONTHLY ATTENDANCE REGISTER MATRIX */}
       {viewMode === 'monthly' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+          <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <h2 className="text-xs font-black text-slate-900 uppercase tracking-wider">
@@ -529,9 +550,26 @@ export default function AttendancePage() {
                 ({filteredStudents.length} Students Listed)
               </span>
             </div>
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
-              Scroll horizontally to view all {daysInMonth.length} dates of the month
-            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadMatrixExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors shadow-xs"
+                title="Download this monthly matrix as an Excel spreadsheet (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Download Matrix (Excel)
+              </button>
+
+              <button
+                onClick={handleDownloadMatrixPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg border border-blue-200 transition-colors shadow-xs"
+                title="Download this monthly matrix as a PDF document"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                Download Matrix (PDF)
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -643,17 +681,17 @@ export default function AttendancePage() {
                           const record = attendanceMap.get(`${student.id}_${d.dateStr}`);
                           const status = record?.status;
 
-                          let badgeClasses = 'bg-slate-50/80 hover:bg-slate-100 text-slate-300 hover:text-slate-600 border border-slate-200/80 border-dashed';
+                          let badgeClasses = 'bg-slate-50/80 text-slate-300 border border-slate-200/80 border-dashed';
                           let label = '-';
 
                           if (status === 'present') {
-                            badgeClasses = 'bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-xs';
+                            badgeClasses = 'bg-emerald-500 text-white font-black shadow-xs';
                             label = 'P';
                           } else if (status === 'absent') {
-                            badgeClasses = 'bg-rose-500 hover:bg-rose-600 text-white font-black shadow-xs';
+                            badgeClasses = 'bg-rose-500 text-white font-black shadow-xs';
                             label = 'A';
                           } else if (status === 'leave') {
-                            badgeClasses = 'bg-blue-500 hover:bg-blue-600 text-white font-black shadow-xs';
+                            badgeClasses = 'bg-blue-500 text-white font-black shadow-xs';
                             label = 'L';
                           }
 
@@ -664,14 +702,12 @@ export default function AttendancePage() {
                                 d.isToday ? 'bg-blue-50/30' : d.isWeekend ? 'bg-slate-50/50' : ''
                               }`}
                             >
-                              <button
-                                type="button"
-                                onClick={() => handleCellToggle(student.id, student.group_id, d.dateStr)}
-                                className={`w-7 h-7 sm:w-8 sm:h-7 mx-auto rounded-md text-xs flex items-center justify-center transition-transform hover:scale-110 active:scale-95 ${badgeClasses}`}
-                                title={`${student.full_name} on ${d.dateStr}: ${status ? status.toUpperCase() : 'Unrecorded'}. Click to toggle status.`}
+                              <div
+                                className={`w-7 h-7 sm:w-8 sm:h-7 mx-auto rounded-md text-xs flex items-center justify-center font-bold select-none cursor-default ${badgeClasses}`}
+                                title={`${student.full_name} on ${d.dateStr}: ${status ? status.toUpperCase() : 'Unrecorded'}`}
                               >
                                 {label}
-                              </button>
+                              </div>
                             </td>
                           );
                         })}
