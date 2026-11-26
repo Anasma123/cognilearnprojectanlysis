@@ -194,6 +194,11 @@ export default function AttendancePage() {
     });
   }, [students, attendance, selectedCollege]);
 
+  // Set of student IDs with low attendance (< 75%)
+  const lowAttendanceStudentIds = useMemo(() => {
+    return new Set(lowAttendanceStudents.map(s => s.id));
+  }, [lowAttendanceStudents]);
+
   // Download handlers for Monthly Matrix
   const handleDownloadMatrixExcel = () => {
     exportMonthlyAttendanceMatrixToExcel(
@@ -325,16 +330,21 @@ export default function AttendancePage() {
 
       {/* Low Attendance Warning Alert */}
       {lowAttendanceStudents.length > 0 && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="text-xs">
-            <p className="font-bold text-amber-900">
-              Low Attendance Warning ({lowAttendanceStudents.length} Students below 75% threshold)
-            </p>
-            <p className="text-amber-800 mt-0.5">
-              Flagged students below 75% threshold: {lowAttendanceStudents.map(s => `${s.full_name} (${s.student_reg_no})`).join(', ')}.
-            </p>
+        <div className="p-3.5 px-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            <div className="text-xs">
+              <p className="font-bold text-rose-900">
+                Low Attendance Alert: {lowAttendanceStudents.length} {lowAttendanceStudents.length === 1 ? 'student has' : 'students have'} attendance below the 75% threshold
+              </p>
+              <p className="text-rose-700 mt-0.5 text-[11px]">
+                Students with attendance shortages are highlighted in a red box below for immediate academic review.
+              </p>
+            </div>
           </div>
+          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200">
+            {lowAttendanceStudents.length} Below 75%
+          </span>
         </div>
       )}
 
@@ -467,6 +477,12 @@ export default function AttendancePage() {
                 -
               </span>
               <span className="text-slate-500 text-xs">Unrecorded</span>
+            </div>
+            <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 font-bold text-[10px]">
+                Red Box
+              </span>
+              <span className="text-rose-700 font-semibold text-xs">&lt;75% Attendance</span>
             </div>
           </div>
         </div>
@@ -663,22 +679,48 @@ export default function AttendancePage() {
 
                     const studentTotal = studentP + studentA + studentL;
                     const studentPct = studentTotal > 0 ? Math.round((studentP / studentTotal) * 100) : 100;
-                    const isLowAttendance = studentTotal > 0 && studentPct < 75;
+                    const isLowAttendance = (studentTotal > 0 && studentPct < 75) || lowAttendanceStudentIds.has(student.id);
 
                     return (
-                      <tr key={student.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr
+                        key={student.id}
+                        className={`transition-colors ${
+                          isLowAttendance ? 'bg-rose-50/25 hover:bg-rose-50/50' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
                         {/* Row Index */}
-                        <td className="py-2.5 px-3 sticky left-0 z-10 bg-white text-center font-mono font-medium text-slate-400 border-r border-slate-100">
+                        <td className={`py-2.5 px-3 sticky left-0 z-10 text-center font-mono font-medium border-r border-slate-100 ${
+                          isLowAttendance ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-white text-slate-400'
+                        }`}>
                           {idx + 1}
                         </td>
 
-                        {/* Student Name & Reg No */}
-                        <td className="py-2.5 px-4 sticky left-12 z-10 bg-white border-r border-slate-100">
-                          <div className="font-bold text-slate-900 truncate max-w-[180px]">
-                            {student.full_name}
-                          </div>
-                          <div className="font-mono text-[10px] text-slate-500">
-                            Reg: {student.student_reg_no || '-'}
+                        {/* Student Name & Reg No Box */}
+                        <td className={`py-2 px-3 sticky left-12 z-10 border-r border-slate-100 transition-colors ${
+                          isLowAttendance ? 'bg-rose-50/90' : 'bg-white'
+                        }`}>
+                          <div className={`p-1.5 rounded-lg border transition-all ${
+                            isLowAttendance
+                              ? 'bg-rose-100/80 border-rose-300 shadow-2xs'
+                              : 'bg-transparent border-transparent'
+                          }`}>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className={`font-bold truncate max-w-[150px] ${
+                                isLowAttendance ? 'text-rose-950 font-black' : 'text-slate-900'
+                              }`}>
+                                {student.full_name}
+                              </span>
+                              {isLowAttendance && (
+                                <span className="shrink-0 px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs" title="Attendance below 75%">
+                                  &lt;75%
+                                </span>
+                              )}
+                            </div>
+                            <div className={`font-mono text-[10px] ${
+                              isLowAttendance ? 'text-rose-700 font-semibold' : 'text-slate-500'
+                            }`}>
+                              Reg: {student.student_reg_no || '-'}
+                            </div>
                           </div>
                         </td>
 
@@ -735,10 +777,12 @@ export default function AttendancePage() {
                         <td className="py-2.5 px-2 text-center bg-blue-50/50 font-black text-blue-700">
                           {studentL}
                         </td>
-                        <td className="py-2.5 px-3 text-center bg-slate-50/60 font-black border-l border-slate-100">
-                          <span className={`px-1.5 py-0.5 rounded text-[11px] ${
+                        <td className={`py-2.5 px-3 text-center font-black border-l border-slate-100 ${
+                          isLowAttendance ? 'bg-rose-100/50' : 'bg-slate-50/60'
+                        }`}>
+                          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                             isLowAttendance
-                              ? 'bg-amber-100 text-amber-800 font-bold'
+                              ? 'bg-rose-600 text-white font-black shadow-2xs'
                               : 'text-slate-800'
                           }`}>
                             {studentPct}%
@@ -789,14 +833,25 @@ export default function AttendancePage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRecords.map((record) => (
-                    <tr key={record.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono font-medium text-slate-700">
-                        {formatDateIndian(record.date)}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-900">
-                        {record.student?.full_name || 'Student'}
-                      </td>
+                  filteredRecords.map((record) => {
+                    const isLow = lowAttendanceStudentIds.has(record.student_id);
+                    return (
+                      <tr key={record.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-4 font-mono font-medium text-slate-700">
+                          {formatDateIndian(record.date)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-bold ${isLow ? 'text-rose-950' : 'text-slate-900'}`}>
+                              {record.student?.full_name || 'Student'}
+                            </span>
+                            {isLow && (
+                              <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200 text-[9px] font-bold">
+                                &lt;75%
+                              </span>
+                            )}
+                          </div>
+                        </td>
                       <td className="py-3 px-4 font-mono text-slate-500">
                         {record.student?.student_reg_no || '-'}
                       </td>
@@ -822,8 +877,9 @@ export default function AttendancePage() {
                         )}
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })
+              )}
               </tbody>
             </table>
           </div>
