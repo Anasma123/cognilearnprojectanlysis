@@ -26,7 +26,25 @@ import {
 import { Modal } from '@/components/ui/Modal';
 
 export default function StudentsPage() {
-  const { students, deleteStudent, colleges, courses, groups, payments, currentUser } = useApp();
+  const { students, deleteStudent, colleges, courses, groups, projects, payments, attendance, tasks, staffMembers, currentUser } = useApp();
+
+  const handleDownloadStudentPdf = (st: Student) => {
+    const grp = groups.find(g => g.id === st.group_id) || st.group;
+    const prj = projects.find(p => p.group_id === grp?.id) || grp?.project;
+    const pay = payments.find(p => p.student_id === st.id);
+    const stAttendance = (attendance || []).filter(a => a.student_id === st.id);
+    const stTasks = (tasks || []).filter(t => t.assigned_student_id === st.id || (grp && t.group_id === grp.id));
+    const staffName = grp?.coordinator_name || grp?.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(s => s.id === grp?.mentor_id || s.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
+
+    generateStudentProfilePdf(st, {
+      group: grp,
+      project: prj,
+      payment: pay,
+      attendanceRecords: stAttendance,
+      tasks: stTasks,
+      staffInChargeName: staffName
+    });
+  };
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,7 +170,7 @@ export default function StudentsPage() {
             >
               <option value="ALL">All Project Groups</option>
               {(groups || []).map((g) => (
-                <option key={g.id} value={g.id}>{g.group_code}</option>
+                <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           </div>
@@ -232,7 +250,7 @@ export default function StudentsPage() {
                     <td className="py-3 px-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-blue-700">
-                          {student.group?.group_code || 'Unassigned'}
+                          {student.group?.name || groups.find(g => g.id === student.group_id)?.name || 'Unassigned'}
                         </span>
                         <span className="text-[11px] text-slate-600 font-medium">
                           {student.assigned_role}
@@ -272,7 +290,7 @@ export default function StudentsPage() {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => generateStudentProfilePdf(student)}
+                          onClick={() => handleDownloadStudentPdf(student)}
                           title="Download Profile PDF"
                           className="p-1.5 rounded-md hover:bg-blue-50 text-blue-600"
                         >
@@ -358,7 +376,7 @@ export default function StudentsPage() {
               </div>
               <div className="p-3 bg-white rounded-lg border border-slate-200">
                 <span className="text-slate-400 block font-medium">Assigned Group</span>
-                <span className="font-semibold text-blue-700">{viewingStudent.group?.group_code || 'Unassigned'}</span>
+                <span className="font-semibold text-blue-700">{viewingStudent.group?.name || groups.find(g => g.id === viewingStudent.group_id)?.name || 'Unassigned'}</span>
               </div>
               <div className="p-3 bg-white rounded-lg border border-slate-200">
                 <span className="text-slate-400 block font-medium">Joining Date</span>
@@ -375,7 +393,7 @@ export default function StudentsPage() {
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
-                onClick={() => generateStudentProfilePdf(viewingStudent)}
+                onClick={() => handleDownloadStudentPdf(viewingStudent)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
               >
                 <FileDown className="w-4 h-4" />

@@ -54,7 +54,7 @@ import {
 } from 'lucide-react';
 
 export default function ReportsPage() {
-  const { colleges, courses, students, groups, projects, attendance, weeklyReports, tasks, evaluations, payments, mentors, staffMembers } = useApp();
+  const { colleges, courses, students, groups, projects, attendance, weeklyReports, tasks, evaluations, payments, mentors, staffMembers, documents } = useApp();
 
   // Active Main Tab: defaults to 'groups' so user sees filtered results immediately!
   const [activeTab, setActiveTab] = useState<'groups' | 'students' | 'projects' | 'college' | 'attendance'>('groups');
@@ -552,7 +552,7 @@ export default function ReportsPage() {
             >
               <option value="ALL">All Groups</option>
               {collegeGroups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name} ({g.group_code})</option>
+                <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           </div>
@@ -917,7 +917,7 @@ export default function ReportsPage() {
                           {s.course?.name || s.department || 'Degree Program'}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="font-bold text-blue-700">{grp?.group_code || 'Unassigned'}</span>
+                          <span className="font-bold text-blue-700">{grp?.name || 'Unassigned'}</span>
                           <span className="block text-[10px] text-slate-500">{s.assigned_role}</span>
                         </td>
                         <td className="py-3 px-4">
@@ -942,7 +942,20 @@ export default function ReportsPage() {
                         <td className="py-3 px-4 text-right">
                           <button
                             type="button"
-                            onClick={() => generateStudentProfilePdf(s)}
+                            onClick={() => {
+                              const prj = collegeProjects.find(p => p.group_id === grp?.id) || projects.find(p => p.group_id === grp?.id);
+                              const stAttendance = collegeAttendance.filter(a => a.student_id === s.id);
+                              const stTasks = tasks.filter(t => t.assigned_student_id === s.id || (grp && t.group_id === grp.id));
+                              const staffName = grp?.coordinator_name || grp?.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
+                              generateStudentProfilePdf(s, {
+                                group: grp,
+                                project: prj,
+                                payment: pay,
+                                attendanceRecords: stAttendance,
+                                tasks: stTasks,
+                                staffInChargeName: staffName
+                              });
+                            }}
                             className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                             title="Download Official Student Profile PDF"
                           >
@@ -1061,7 +1074,18 @@ export default function ReportsPage() {
                         <td className="py-3 px-4 text-right">
                           <button
                             type="button"
-                            onClick={() => generateFinalProjectReportPdf(p, grp, evalRecord)}
+                            onClick={() => {
+                              const prjStudents = students.filter(st => st.group_id === grp?.id || (grp?.member_ids || []).includes(st.id));
+                              const prjTasks = tasks.filter(t => t.project_id === p.id || (grp && t.group_id === grp.id));
+                              const prjDocs = documents.filter(d => d.project_id === p.id || (grp && d.group_id === grp.id));
+                              const staffName = grp?.coordinator_name || grp?.mentor?.full_name || p.mentor?.full_name || staffMembers.find(st => st.id === grp?.mentor_id || st.id === p.mentor_id)?.full_name || 'Staff Coordinator';
+                              generateFinalProjectReportPdf(p, grp, evalRecord, {
+                                students: prjStudents,
+                                tasks: prjTasks,
+                                documents: prjDocs,
+                                staffInChargeName: staffName
+                              });
+                            }}
                             className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                             title="Download Final Project Dissertation PDF"
                           >

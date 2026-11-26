@@ -5,7 +5,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment, Task } from '../types';
+import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment, Task, ProjectDocument } from '../types';
 import { formatDateIndian } from './formatters';
 
 const PRIMARY_COLOR: [number, number, number] = [15, 23, 42]; // Navy #0f172a
@@ -70,52 +70,202 @@ function addReportFooter(doc: jsPDF) {
 }
 
 /**
- * Generate Individual Student Profile PDF
+ * Generate Individual Student Profile PDF - Exhaustive Academic & Financial Dossier
  */
-export function generateStudentProfilePdf(student: Student) {
-  const doc = new jsPDF();
-  addCognilearnHeader(doc, `STUDENT PROFILE: ${student.full_name.toUpperCase()}`);
+export interface ComprehensiveStudentDossierOptions {
+  group?: Group;
+  project?: Project;
+  payment?: StudentPayment;
+  attendanceRecords?: AttendanceRecord[];
+  tasks?: Task[];
+  staffInChargeName?: string;
+}
 
-  const studentDetails = [
-    ['Register Number', student.student_reg_no, 'Joining Date', formatDateIndian(student.joining_date)],
-    ['Full Name', student.full_name, 'Status', student.status.toUpperCase()],
-    ['Email', student.email, 'Phone', student.phone || 'N/A'],
-    ['College', student.college?.name || 'MES College', 'Class / Year', student.class_year],
-    ['Department', student.department, 'Group Assigned', student.group?.group_code || 'Unassigned'],
-    ['Assigned Role', student.assigned_role || 'Unassigned', 'Project Code', student.group?.project?.project_code || 'N/A'],
+export function generateStudentProfilePdf(student: Student, options?: ComprehensiveStudentDossierOptions) {
+  const doc = new jsPDF();
+  const collegeName = student.college?.name || 'Academic Institution';
+  const group = options?.group || student.group;
+  const project = options?.project || student.group?.project;
+  const payment = options?.payment;
+  const attendanceRecords = options?.attendanceRecords || [];
+  const tasks = options?.tasks || [];
+  const staffName = options?.staffInChargeName || group?.coordinator_name || group?.mentor?.full_name || 'Staff Coordinator';
+
+  addCognilearnHeader(
+    doc,
+    `STUDENT ACADEMIC & FINANCIAL DOSSIER: ${student.full_name.toUpperCase()}`,
+    `Register No: ${student.student_reg_no} | College: ${collegeName}`
+  );
+
+  // 1. Executive Student Profile Table
+  const profileDetails = [
+    ['Register Number', String(student.student_reg_no), 'Academic Status', student.status.toUpperCase()],
+    ['Full Name', student.full_name, 'Joining Date', formatDateIndian(student.joining_date)],
+    ['Email Address', student.email, 'Contact Phone', student.phone || 'N/A'],
+    ['Institution', collegeName, 'Department / Course', student.course?.name || student.department || 'N/A'],
+    ['Class / Year', student.class_year || 'Final Year', 'Assigned Team Role', student.assigned_role || 'Member'],
+    ['Assigned Group', group?.name || 'Unassigned', 'Assigned Project', project?.title || 'Dissertation Project']
   ];
 
   autoTable(doc, {
     startY: 50,
-    head: [['Field', 'Details', 'Field', 'Details']],
-    body: studentDetails,
+    head: [['Attribute', 'Details', 'Attribute', 'Details']],
+    body: profileDetails,
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 9, cellPadding: 3.5 },
+    styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: {
+      0: { cellWidth: 26, fontStyle: 'bold' },
+      1: { cellWidth: 65 },
+      2: { cellWidth: 28, fontStyle: 'bold' },
+      3: { cellWidth: 63 }
+    }
   });
 
-  const lastY = (doc as any).lastAutoTable.finalY + 10;
-  doc.setFontSize(11);
+  // 2. Financial Ledger & Fee Payment Compliance Table
+  let currentY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...PRIMARY_COLOR);
-  doc.text('Mentor & Institutional Remarks:', 14, lastY);
+  doc.text('1. Student Fee Ledger & Financial Compliance:', 14, currentY);
 
-  doc.setFontSize(9);
+  const fee = payment?.total_fee ?? student.total_fee ?? 15000;
+  const paid = payment?.paid_amount ?? student.paid_amount ?? 0;
+  const balance = payment?.balance_amount ?? (fee - paid);
+  const feeStatus = (payment?.status || (balance === 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid')).toUpperCase();
+  const lastPaymentStr = payment?.last_payment_date ? formatDateIndian(payment.last_payment_date) : 'No payments logged';
+
+  const feeData = [
+    ['Total Course / Lab Fee', formatCurrencyPdf(fee), 'Fee Clearance Status', feeStatus],
+    ['Total Amount Paid', formatCurrencyPdf(paid), 'Last Payment Date', lastPaymentStr],
+    ['Outstanding Balance Due', formatCurrencyPdf(balance), 'Payment Compliance', balance === 0 ? 'CLEAR (No Dues)' : `OUTSTANDING: ${formatCurrencyPdf(balance)}`]
+  ];
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    body: feeData,
+    theme: 'grid',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 49 },
+      2: { cellWidth: 42, fontStyle: 'bold' },
+      3: { cellWidth: 49 }
+    }
+  });
+
+  // 3. Laboratory & Sprint Attendance Audit
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('2. Laboratory & Sprint Attendance Audit:', 14, currentY);
+
+  const totalSessions = attendanceRecords.length;
+  const presentDays = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+  const absentDays = attendanceRecords.filter(a => a.status === 'absent' || a.status === 'leave').length;
+  const lateDays = attendanceRecords.filter(a => a.status === 'late').length;
+  const attendanceRate = totalSessions > 0 ? Math.round((presentDays / totalSessions) * 100) : 100;
+  const academicClearance = attendanceRate >= 75 ? 'ELIGIBLE FOR SUBMISSION' : 'ATTENDANCE SHORTAGE';
+
+  const attendanceData = [
+    ['Total Sessions Logged', String(totalSessions), 'Attendance Rate', `${attendanceRate}%`],
+    ['Present Days', String(presentDays), 'Absent Days', String(absentDays)],
+    ['Recorded Late', String(lateDays), 'Academic Clearance', academicClearance]
+  ];
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    body: attendanceData,
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 49 },
+      2: { cellWidth: 42, fontStyle: 'bold' },
+      3: { cellWidth: 49 }
+    }
+  });
+
+  // 4. Assigned Sprint Tasks & Deliverables Table
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('3. Assigned Sprint Tasks & Deliverables:', 14, currentY);
+
+  const studentTasks = tasks.filter(t => t.assigned_student_id === student.id);
+  const displayTasks = studentTasks.length > 0 ? studentTasks : tasks.slice(0, 5);
+
+  const taskRows = displayTasks.map((t, idx) => [
+    idx + 1,
+    t.title,
+    (t.priority || 'medium').toUpperCase(),
+    (t.status || 'todo').toUpperCase(),
+    t.due_date ? formatDateIndian(t.due_date) : 'N/A'
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Task Title & Deliverable', 'Priority', 'Status', 'Due Date']],
+    body: taskRows.length > 0 ? taskRows : [['-', 'No active sprint tasks registered for this student', '-', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 94 },
+      2: { cellWidth: 26, halign: 'center' },
+      3: { cellWidth: 28, halign: 'center' },
+      4: { cellWidth: 26, halign: 'center' }
+    }
+  });
+
+  // 5. Mentor & Institutional Remarks
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('Mentor & Institutional Remarks:', 14, currentY);
+
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(51, 65, 85);
-  doc.text(student.notes || 'Student is in good academic standing and actively participating in sprint sessions.', 14, lastY + 6);
+  const remarks = student.notes || 'Student is in good academic standing, maintaining required lab presence and sprint participation.';
+  const splitRemarks = doc.splitTextToSize(remarks, 182);
+  doc.text(splitRemarks, 14, currentY + 5);
 
-  // Signature Block
-  const sigY = lastY + 35;
+  // 6. Signatures Block
+  currentY += 8 + (splitRemarks.length * 3.8);
+  if (currentY > 245) { doc.addPage(); currentY = 25; }
+
+  const sigY = currentY + 14;
   doc.setDrawColor(148, 163, 184);
-  doc.line(14, sigY, 65, sigY);
+  doc.line(14, sigY, 75, sigY);
   doc.line(135, sigY, 196, sigY);
+
   doc.setFontSize(8);
-  doc.text('Project Mentor Signature', 14, sigY + 5);
-  doc.text('Cognilearn Academic Director', 135, sigY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text(`Staff In-Charge: ${staffName}`, 14, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Project Coordinator & Mentor', 14, sigY + 9);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Academic Controller / HOD', 135, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Student Academic Evaluation Cell', 135, sigY + 9);
 
   addReportFooter(doc);
-  doc.save(`Student_${student.student_reg_no}_Profile.pdf`);
+  doc.save(`Student_${student.student_reg_no}_${student.full_name.replace(/[^a-zA-Z0-9]/g, '_')}_Dossier.pdf`);
 }
 
 /**
@@ -513,56 +663,239 @@ export function generateAttendancePdf(records: AttendanceRecord[], groupName = '
 }
 
 /**
- * Generate Final Project Comprehensive Report PDF
+ * Generate Final Project Comprehensive Report PDF - Exhaustive Architecture & Dissertation Portfolio
  */
-export function generateFinalProjectReportPdf(project: Project, group?: Group, evaluation?: Evaluation) {
+export interface ComprehensiveProjectPortfolioOptions {
+  students?: Student[];
+  tasks?: Task[];
+  documents?: ProjectDocument[];
+  staffInChargeName?: string;
+}
+
+export function generateFinalProjectReportPdf(
+  project: Project,
+  group?: Group,
+  evaluation?: Evaluation,
+  options?: ComprehensiveProjectPortfolioOptions
+) {
   const doc = new jsPDF();
-  addCognilearnHeader(doc, `PROJECT DISSERTATION SUMMARY: ${project.project_code}`, project.title);
+  const collegeName = group?.college?.name || 'Academic Institution';
+  const groupName = group?.name || 'Cohort Group';
+  const staffName = options?.staffInChargeName || group?.coordinator_name || group?.mentor?.full_name || project.mentor?.full_name || 'Staff Coordinator';
+  const students = options?.students || group?.members || [];
+  const tasks = options?.tasks || [];
+  const documents = options?.documents || [];
+
+  addCognilearnHeader(
+    doc,
+    `PROJECT DISSERTATION & ARCHITECTURE DOSSIER`,
+    `Project: ${project.title.toUpperCase()} | Group: ${groupName} | College: ${collegeName}`
+  );
+
+  // 1. Executive Meta & Architecture Table
+  const phases = project.lifecycle_phases;
+  const verifiedCount = [phases?.planning, phases?.design, phases?.development, phases?.testing].filter(Boolean).length;
+  const verifiedPhasesStr = verifiedCount === 4
+    ? '4/4 Verified (All Phases Done)'
+    : verifiedCount > 0
+    ? `${verifiedCount}/4 Verified (${[
+        phases?.planning ? 'Plan' : '',
+        phases?.design ? 'Design' : '',
+        phases?.development ? 'Dev' : '',
+        phases?.testing ? 'Test' : ''
+      ].filter(Boolean).join(', ')})`
+    : '0/4 Verified (In Planning)';
 
   const metaRows = [
-    ['Project Code', project.project_code, 'Category', project.category],
-    ['Topic', project.topic, 'Current Status', project.status.toUpperCase()],
-    ['Group Code', group?.group_code || '-', 'Overall Progress', `${project.progress_percentage}%`],
-    ['Mentor', project.mentor?.full_name || 'Unassigned', 'Start / End', `${formatDateIndian(project.start_date)} - ${formatDateIndian(project.expected_completion_date)}`]
+    ['Project Title', project.title, 'Project Status', project.status.toUpperCase()],
+    ['Domain Category', project.category, 'Overall Progress', `${project.progress_percentage}%`],
+    ['Associated Group', groupName, 'Staff In-Charge', staffName],
+    ['Start Date', formatDateIndian(project.start_date), 'Target Completion', formatDateIndian(project.expected_completion_date)],
+    ['Tech Stack', (project.technologies || []).join(', ') || 'Software Stack', 'Lifecycle Phases', verifiedPhasesStr],
+    ['Git Repository', project.repository_url || 'Internal Repository', 'Live Demo URL', project.live_demo_url || 'Staging Environment']
   ];
 
   autoTable(doc, {
     startY: 50,
-    head: [['Item', 'Value', 'Item', 'Value']],
+    head: [['Attribute', 'Specification', 'Attribute', 'Specification']],
     body: metaRows,
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 8.5 }
+    styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+    columnStyles: {
+      0: { cellWidth: 26, fontStyle: 'bold' },
+      1: { cellWidth: 65 },
+      2: { cellWidth: 28, fontStyle: 'bold' },
+      3: { cellWidth: 63 }
+    }
   });
 
+  // 2. Problem Statement & Engineering Objectives
   let currentY = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('Problem Statement & Objectives:', 14, currentY);
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('1. Problem Statement & Engineering Objectives:', 14, currentY);
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  const problemLines = doc.splitTextToSize(project.problem_statement || 'N/A', 180);
+  doc.setTextColor(51, 65, 85);
+  const problemLines = doc.splitTextToSize(project.problem_statement || project.description || 'Project aims to deliver end-to-end cloud-native architecture with robust database and user interfaces.', 182);
   doc.text(problemLines, 14, currentY + 5);
 
-  currentY += 8 + (problemLines.length * 4);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Technologies Used:', 14, currentY);
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(project.technologies.join(', ') || 'N/A', 14, currentY + 5);
+  currentY += 6 + (problemLines.length * 3.8);
 
+  // 3. Project Engineering Team (Students Roster)
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('2. Project Engineering Team & Student Roster:', 14, currentY);
+
+  const studentRows = students.map((s, idx) => [
+    idx + 1,
+    s.student_reg_no || 'REG-' + (idx + 1),
+    s.full_name,
+    s.assigned_role || 'Developer',
+    s.email,
+    s.phone || '-'
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Register No', 'Student Name', 'Role', 'Email', 'Phone']],
+    body: studentRows.length > 0 ? studentRows : [['-', '-', 'No student members assigned', '-', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 26 },
+      2: { cellWidth: 46 },
+      3: { cellWidth: 36 },
+      4: { cellWidth: 42 },
+      5: { cellWidth: 24 }
+    }
+  });
+
+  // 4. Presentations & Evaluation Defense Rounds
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('3. Presentation & Defense Review Rounds:', 14, currentY);
+
+  const presRows = (project.presentations || []).map((p, idx) => [
+    `Round ${p.round_number || (p as any).round || idx + 1}`,
+    p.title || `Presentation Phase ${p.round_number || (p as any).round || idx + 1}`,
+    formatDateIndian(p.date),
+    p.status.toUpperCase(),
+    p.feedback || (p as any).notes || 'Review completed by evaluation panel'
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['Round', 'Presentation Title', 'Date', 'Status', 'Committee Feedback']],
+    body: presRows.length > 0 ? presRows : [['Round 1', 'Dissertation Synopsis Review', formatDateIndian(project.start_date), 'COMPLETED', 'Initial proposal and system requirements approved']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 20, halign: 'center' },
+      1: { cellWidth: 50 },
+      2: { cellWidth: 26, halign: 'center' },
+      3: { cellWidth: 26, halign: 'center' },
+      4: { cellWidth: 60 }
+    }
+  });
+
+  // 5. Work Packages & Sprint Deliverables
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('4. Work Packages & Sprint Deliverables:', 14, currentY);
+
+  const projectTasks = tasks.filter(t => t.project_id === project.id || (group && t.group_id === group.id));
+  const taskRows = projectTasks.map((t, idx) => {
+    const assigned = students.find(s => s.id === t.assigned_student_id);
+    return [
+      idx + 1,
+      t.title,
+      assigned?.full_name || 'Team Work Package',
+      (t.priority || 'medium').toUpperCase(),
+      (t.status || 'todo').toUpperCase(),
+      t.due_date ? formatDateIndian(t.due_date) : 'N/A'
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Task Title & Deliverable', 'Assigned To', 'Priority', 'Status', 'Due Date']],
+    body: taskRows.length > 0 ? taskRows : [['-', 'No active sprint deliverables logged', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 24, halign: 'center' },
+      5: { cellWidth: 22, halign: 'center' }
+    }
+  });
+
+  // 6. Project Document Repository & Artifacts
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('5. Project Document Repository & Artifacts:', 14, currentY);
+
+  const projectDocs = documents.filter(d => d.project_id === project.id || (group && d.group_id === group.id));
+  const docRows = projectDocs.map((d, idx) => [
+    idx + 1,
+    d.title,
+    d.file_name,
+    formatDateIndian(d.created_at)
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Document Title', 'File Name', 'Uploaded Date']],
+    body: docRows.length > 0 ? docRows : [['-', 'Project Dissertation SRS & Source Archive', 'Dissertation_SRS_v1.0.pdf', formatDateIndian(project.start_date)]],
+    theme: 'striped',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5, overflow: 'linebreak' },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 68 },
+      3: { cellWidth: 36, halign: 'center' }
+    }
+  });
+
+  // 7. Mentor Evaluation Matrix (if available)
   if (evaluation) {
-    currentY += 12;
-    doc.setFontSize(10);
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+    if (currentY > 235) { doc.addPage(); currentY = 20; }
+
+    doc.setFontSize(10.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('Mentor Evaluation Matrix (Score / 10):', 14, currentY);
+    doc.setTextColor(...PRIMARY_COLOR);
+    doc.text('6. Mentor Evaluation Matrix (Score / 10):', 14, currentY);
 
     const evalData = [
-      ['Technical Skills', `${evaluation.technical_skills}/10`, 'Teamwork', `${evaluation.teamwork}/10`],
-      ['Communication', `${evaluation.communication}/10`, 'Problem Solving', `${evaluation.problem_solving}/10`],
-      ['Project Management', `${evaluation.project_management}/10`, 'Overall Performance', `${evaluation.overall_performance}/10`],
+      ['Technical Skills', `${evaluation.technical_skills}/10`, 'Teamwork & Collaboration', `${evaluation.teamwork}/10`],
+      ['Communication & Defense', `${evaluation.communication}/10`, 'Problem Solving & Innovation', `${evaluation.problem_solving}/10`],
+      ['Project Management', `${evaluation.project_management}/10`, 'Overall Aggregate Performance', `${evaluation.overall_performance}/10`],
     ];
 
     autoTable(doc, {
@@ -570,12 +903,39 @@ export function generateFinalProjectReportPdf(project: Project, group?: Group, e
       body: evalData,
       theme: 'grid',
       headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
-      styles: { fontSize: 8.5 }
+      styles: { fontSize: 8, overflow: 'linebreak', cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 42, fontStyle: 'bold' },
+        1: { cellWidth: 49 },
+        2: { cellWidth: 42, fontStyle: 'bold' },
+        3: { cellWidth: 49 }
+      }
     });
   }
 
+  // 8. Signatures Block
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+  if (currentY > 245) { doc.addPage(); currentY = 30; }
+
+  const sigY = currentY + 14;
+  doc.setDrawColor(148, 163, 184);
+  doc.line(14, sigY, 75, sigY);
+  doc.line(135, sigY, 196, sigY);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text(`Staff In-Charge: ${staffName}`, 14, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Project Coordinator & Mentor', 14, sigY + 9);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Academic Controller / HOD', 135, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Project Verification & Assessment Cell', 135, sigY + 9);
+
   addReportFooter(doc);
-  doc.save(`Project_${project.project_code}_Report.pdf`);
+  doc.save(`Project_${project.title.replace(/[^a-zA-Z0-9]/g, '_')}_Portfolio.pdf`);
 }
 
 /**

@@ -97,10 +97,7 @@ export default function GroupsPage() {
             >
               <div className="p-5">
                 {/* Top Badge & Status */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 text-xs font-bold font-mono">
-                    {group.group_code}
-                  </span>
+                <div className="flex items-center justify-end mb-3">
                   <StatusBadge status={group.status} />
                 </div>
 
@@ -221,7 +218,7 @@ export default function GroupsPage() {
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Are you sure you want to delete group <strong className="text-slate-900">{groupToDelete.name}</strong> ({groupToDelete.group_code})?
+              Are you sure you want to delete group <strong className="text-slate-900">{groupToDelete.name}</strong>?
             </p>
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button

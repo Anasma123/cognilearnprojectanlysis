@@ -135,8 +135,7 @@ export default function AttendancePage() {
               Low Attendance Warning ({lowAttendanceStudents.length} Students below 75% threshold)
             </p>
             <p className="text-amber-800 mt-0.5">
-              University guidelines require 75% minimum lab attendance for semester project submission sign-off.
-              Flagged: {lowAttendanceStudents.map(s => `${s.full_name} (${s.student_reg_no})`).join(', ')}.
+              Flagged students below 75% threshold: {lowAttendanceStudents.map(s => `${s.full_name} (${s.student_reg_no})`).join(', ')}.
             </p>
           </div>
         </div>

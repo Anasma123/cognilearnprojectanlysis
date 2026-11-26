@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, groups, mentors, staffMembers, milestones, tasks, evaluations, updateProject, deleteProject, currentUser } = useApp();
+  const { projects, groups, mentors, staffMembers, milestones, tasks, evaluations, students, documents, updateProject, deleteProject, currentUser } = useApp();
 
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
@@ -259,9 +259,6 @@ export default function ProjectsPage() {
                   {/* Left Column */}
                   <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-800 text-xs font-bold font-mono">
-                        {project.project_code}
-                      </span>
                       <StatusBadge status={project.status} />
                       {project.presentations && project.presentations.length > 0 && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -314,7 +311,7 @@ export default function ProjectsPage() {
                     {/* Under project name near group show the staff in charge */}
                     <div className="flex items-center gap-2.5 flex-wrap text-xs mt-1">
                       <span className="font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
-                        Group: {group?.name || 'Group'} ({group?.group_code || 'GRP'})
+                        Group: {group?.name || 'Group'}
                       </span>
                       <span className="font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1.5">
                         <UserCheck className="w-3.5 h-3.5 text-blue-600" />
@@ -408,7 +405,18 @@ export default function ProjectsPage() {
                         </a>
                       )}
                       <button
-                        onClick={() => generateFinalProjectReportPdf(project, group, evaluation)}
+                        onClick={() => {
+                          const prjStudents = (students || []).filter(s => s.group_id === group?.id || (group?.member_ids || []).includes(s.id));
+                          const prjTasks = (tasks || []).filter(t => t.project_id === project.id || (group && t.group_id === group.id));
+                          const prjDocs = (documents || []).filter(d => d.project_id === project.id || (group && d.group_id === group.id));
+                          const staffName = group?.coordinator_name || group?.mentor?.full_name || project.mentor?.full_name || staffMembers.find(s => s.id === group?.mentor_id || s.id === project.mentor_id)?.full_name || 'Staff Coordinator';
+                          generateFinalProjectReportPdf(project, group, evaluation, {
+                            students: prjStudents,
+                            tasks: prjTasks,
+                            documents: prjDocs,
+                            staffInChargeName: staffName
+                          });
+                        }}
                         title="Download Final Project Report PDF"
                         className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
                       >
@@ -446,8 +454,8 @@ export default function ProjectsPage() {
         <Modal
           isOpen={true}
           onClose={() => setProjectToEdit(null)}
-          title={`Manage Project: ${projectToEdit.project_code}`}
-          subtitle={projectToEdit.title}
+          title={`Manage Project: ${projectToEdit.title}`}
+          subtitle={`Cohort Group: ${groups.find(g => g.id === projectToEdit.group_id)?.name || 'Academic Group'}`}
           maxWidth="2xl"
         >
           <form onSubmit={handleSaveEdit} className="space-y-4">
@@ -468,9 +476,6 @@ export default function ProjectsPage() {
                     <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                     Auto-Fill Empty Fields
                   </button>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    Code: {projectToEdit.project_code}
-                  </span>
                 </div>
               </div>
 
@@ -977,7 +982,7 @@ export default function ProjectsPage() {
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Are you sure you want to delete <strong className="text-slate-900">{projectToDelete.title}</strong> ({projectToDelete.project_code})?
+              Are you sure you want to delete <strong className="text-slate-900">{projectToDelete.title}</strong>?
             </p>
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
               Note: Academic projects require assigned students. Projects with no assigned students are automatically pruned.
