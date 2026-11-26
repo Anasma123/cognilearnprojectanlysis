@@ -18,8 +18,10 @@ import {
   generateFinalProjectReportPdf,
   generateCollegeReportPdf,
   generateFilteredGroupsPdf,
-  generateFilteredStudentsPdf
+  generateFilteredStudentsPdf,
+  generateComprehensiveGroupDossierPdf
 } from '@/lib/utils/exportPdf';
+import { Group } from '@/lib/types';
 import { formatCurrencyIndian, formatDateIndian } from '@/lib/utils/formatters';
 import { Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -52,7 +54,7 @@ import {
 } from 'lucide-react';
 
 export default function ReportsPage() {
-  const { colleges, courses, students, groups, projects, attendance, weeklyReports, tasks, evaluations, payments, mentors } = useApp();
+  const { colleges, courses, students, groups, projects, attendance, weeklyReports, tasks, evaluations, payments, mentors, staffMembers } = useApp();
 
   // Active Main Tab: defaults to 'groups' so user sees filtered results immediately!
   const [activeTab, setActiveTab] = useState<'groups' | 'students' | 'projects' | 'college' | 'attendance'>('groups');
@@ -69,6 +71,30 @@ export default function ReportsPage() {
   // Full College Dossier Modal State
   const [showCollegeModal, setShowCollegeModal] = useState(false);
   const [collegeActiveTab, setCollegeActiveTab] = useState<'groups' | 'students' | 'departments'>('groups');
+
+  // Comprehensive Group Dossier Modal State
+  const [selectedGroupDossier, setSelectedGroupDossier] = useState<Group | null>(null);
+
+  const handleDownloadGroupDossier = (grp: Group) => {
+    const prj = collegeProjects.find(p => p.group_id === grp.id) || grp.project;
+    const grpStudents = students.filter(s => s.group_id === grp.id || (grp.member_ids || []).includes(s.id));
+    const grpPayments = payments.filter(p => grpStudents.some(s => s.id === p.student_id));
+    const grpAttendance = attendance.filter(a => a.group_id === grp.id || grpStudents.some(s => s.id === a.student_id));
+    const grpTasks = tasks.filter(t => t.group_id === grp.id || (prj && t.project_id === prj.id));
+    const grpWeekly = weeklyReports.filter(w => w.group_id === grp.id);
+    const staffName = grp.coordinator_name || grp.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(s => s.id === grp.mentor_id || s.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
+
+    generateComprehensiveGroupDossierPdf({
+      group: grp,
+      project: prj,
+      students: grpStudents,
+      payments: grpPayments,
+      attendance: grpAttendance,
+      tasks: grpTasks,
+      weeklyReports: grpWeekly,
+      staffInChargeName: staffName
+    });
+  };
 
   // Resolved College Object
   const currentCollege = useMemo(() => {
@@ -791,15 +817,26 @@ export default function ReportsPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => generateGroupSummaryPdf(g, prj, weeklyReports.filter(w => w.group_id === g.id))}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            title="Download Group Summary PDF"
-                          >
-                            <FileDown className="w-3.5 h-3.5" />
-                            Group PDF
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGroupDossier(g)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="View Full Cohort Dossier on Screen"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-600" />
+                              View Details
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadGroupDossier(g)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              title="Download Single Complete PDF with Fees, Attendance & Details"
+                            >
+                              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                              Download PDF
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1499,6 +1536,227 @@ export default function ReportsPage() {
           </div>
         </Modal>
       )}
+
+      {/* ========================================================================= */}
+      {/* COMPREHENSIVE GROUP DOSSIER & ACADEMIC AUDIT MODAL                        */}
+      {/* ========================================================================= */}
+      {selectedGroupDossier && (() => {
+        const grp = selectedGroupDossier;
+        const prj = collegeProjects.find(p => p.group_id === grp.id) || grp.project;
+        const grpStudents = students.filter(s => s.group_id === grp.id || (grp.member_ids || []).includes(s.id));
+        const grpPayments = payments.filter(p => grpStudents.some(s => s.id === p.student_id));
+        const grpAttendance = attendance.filter(a => a.group_id === grp.id || grpStudents.some(s => s.id === a.student_id));
+        const grpTasks = tasks.filter(t => t.group_id === grp.id || (prj && t.project_id === prj.id));
+        const grpWeekly = weeklyReports.filter(w => w.group_id === grp.id);
+        const staffName = grp.coordinator_name || grp.mentor?.full_name || prj?.mentor?.full_name || staffMembers.find(s => s.id === grp.mentor_id || s.id === prj?.mentor_id)?.full_name || 'Staff Coordinator';
+
+        const totalFee = grpPayments.reduce((acc, p) => acc + (p.total_fee || 15000), 0);
+        const paidFee = grpPayments.reduce((acc, p) => acc + (p.paid_amount || 0), 0);
+        const balanceFee = grpPayments.reduce((acc, p) => acc + (p.balance_amount || 0), 0);
+
+        const totalAttSessions = grpAttendance.length;
+        const presentAttSessions = grpAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+        const avgAttendanceRate = totalAttSessions > 0 ? Math.round((presentAttSessions / totalAttSessions) * 100) : 100;
+
+        return (
+          <Modal
+            isOpen={true}
+            onClose={() => setSelectedGroupDossier(null)}
+            title={`Cohort Academic Dossier: ${grp.name} (${grp.group_code})`}
+            subtitle="Comprehensive Academic, Attendance & Financial Audit"
+            maxWidth="4xl"
+          >
+            <div className="space-y-6 text-xs max-h-[75vh] overflow-y-auto pr-1">
+              {/* Header Action Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-blue-50/80 border border-blue-200 rounded-xl">
+                <div>
+                  <span className="font-bold text-blue-950 text-sm">{grp.name} • {grp.group_code}</span>
+                  <p className="text-slate-600 text-[11px] mt-0.5">
+                    Staff In-Charge: <strong className="text-blue-800">{staffName}</strong> • Leader: <strong className="text-slate-800">{grp.leader?.full_name || 'Assigned'}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadGroupDossier(grp)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-xs transition-colors cursor-pointer shrink-0"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Download Full PDF Dossier
+                </button>
+              </div>
+
+              {/* KPI Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Overall Progress</span>
+                  <span className="text-lg font-black text-emerald-600">{prj?.progress_percentage ?? 0}%</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Team Attendance</span>
+                  <span className={`text-lg font-black ${avgAttendanceRate >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {avgAttendanceRate}%
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Fee Collected</span>
+                  <span className="text-lg font-black text-slate-900">{formatCurrencyIndian(paidFee)}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Outstanding Balance</span>
+                  <span className={`text-lg font-black ${balanceFee === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {formatCurrencyIndian(balanceFee)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Project Blueprint */}
+              <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 text-sm">Project Blueprint & Deliverables</h4>
+                  <div className="flex items-center gap-1">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${prj?.lifecycle_phases?.planning ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                      Planning {prj?.lifecycle_phases?.planning ? '✓' : ''}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${prj?.lifecycle_phases?.design ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-400'}`}>
+                      Design {prj?.lifecycle_phases?.design ? '✓' : ''}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${prj?.lifecycle_phases?.development ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-400'}`}>
+                      Development {prj?.lifecycle_phases?.development ? '✓' : ''}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${prj?.lifecycle_phases?.testing ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-400'}`}>
+                      Testing {prj?.lifecycle_phases?.testing ? '✓' : ''}
+                    </span>
+                  </div>
+                </div>
+                <p className="font-semibold text-slate-800">{prj?.title || grp.project_title || 'N/A'}</p>
+                <p className="text-slate-600 text-xs">{prj?.description || 'Capstone academic project.'}</p>
+                {prj?.technologies && (
+                  <div className="flex items-center gap-1 flex-wrap pt-1">
+                    {prj.technologies.map((t, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Student Roster with Fees & Attendance */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-900 text-sm">Student Academic & Financial Details ({grpStudents.length} Members)</h4>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px]">
+                        <th className="py-2.5 px-3">Student Name</th>
+                        <th className="py-2.5 px-3">Reg No</th>
+                        <th className="py-2.5 px-3">Role</th>
+                        <th className="py-2.5 px-3">Attendance</th>
+                        <th className="py-2.5 px-3">Fee Status</th>
+                        <th className="py-2.5 px-3 text-right">Fee Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {grpStudents.map(s => {
+                        const sRecords = grpAttendance.filter(a => a.student_id === s.id);
+                        const sPresent = sRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+                        const sRate = sRecords.length > 0 ? Math.round((sPresent / sRecords.length) * 100) : 100;
+                        const sPay = grpPayments.find(p => p.student_id === s.id);
+                        const sBalance = sPay?.balance_amount ?? 0;
+
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900">
+                              {s.full_name}
+                              <div className="text-[10px] text-slate-400">{s.email}</div>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600">{s.student_reg_no || '-'}</td>
+                            <td className="py-2.5 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${s.id === grp.group_leader_id ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'}`}>
+                                {s.id === grp.group_leader_id ? 'Leader' : 'Member'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`font-bold ${sRate >= 75 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                {sRate}%
+                              </span>
+                              <span className="text-[10px] text-slate-400 block">{sPresent}/{sRecords.length} sessions</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sBalance === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {sBalance === 0 ? 'Paid' : 'Due'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
+                              {formatCurrencyIndian(sBalance)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Sprint Tasks */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-900 text-sm">Sprint Tasks ({grpTasks.length} Work Packages)</h4>
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px]">
+                        <th className="py-2 px-3">Task Title</th>
+                        <th className="py-2 px-3">Priority</th>
+                        <th className="py-2 px-3">Status</th>
+                        <th className="py-2 px-3">Due Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {grpTasks.length === 0 ? (
+                        <tr><td colSpan={4} className="py-4 text-center text-slate-400">No sprint tasks recorded.</td></tr>
+                      ) : (
+                        grpTasks.map(t => (
+                          <tr key={t.id} className="hover:bg-slate-50">
+                            <td className="py-2 px-3 font-medium text-slate-800">{t.title}</td>
+                            <td className="py-2 px-3 uppercase text-[10px] font-bold text-slate-600">{t.priority}</td>
+                            <td className="py-2 px-3 uppercase text-[10px] font-bold text-blue-700">{t.status}</td>
+                            <td className="py-2 px-3 text-slate-500">{t.due_date ? formatDateIndian(t.due_date) : '-'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Weekly Reports & Feedback */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-900 text-sm">Weekly Progress & Review Submissions ({grpWeekly.length} Weeks)</h4>
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  <div className="divide-y divide-slate-100">
+                    {grpWeekly.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400">No weekly review submissions logged yet.</div>
+                    ) : (
+                      grpWeekly.map(w => (
+                        <div key={w.id} className="p-3 text-xs space-y-1 hover:bg-slate-50">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900">Week {w.week_number} ({formatDateIndian(w.start_date)} - {formatDateIndian(w.end_date)})</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">{w.review_status}</span>
+                          </div>
+                          <p className="text-slate-600 text-[11px]"><strong>Accomplished:</strong> {w.activities_completed}</p>
+                          {w.mentor_feedback && (
+                            <p className="text-emerald-700 text-[11px]"><strong>Staff Feedback:</strong> {w.mentor_feedback}</p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

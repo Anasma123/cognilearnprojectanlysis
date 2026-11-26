@@ -21,11 +21,12 @@ import {
   Cpu,
   Trash2,
   Plus,
-  Presentation
+  Presentation,
+  UserCheck
 } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const { projects, groups, mentors, milestones, tasks, evaluations, updateProject, deleteProject, currentUser } = useApp();
+  const { projects, groups, mentors, staffMembers, milestones, tasks, evaluations, updateProject, deleteProject, currentUser } = useApp();
 
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
@@ -310,6 +311,17 @@ export default function ProjectsPage() {
                       {project.title}
                     </h2>
 
+                    {/* Under project name near group show the staff in charge */}
+                    <div className="flex items-center gap-2.5 flex-wrap text-xs mt-1">
+                      <span className="font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                        Group: {group?.name || 'Group'} ({group?.group_code || 'GRP'})
+                      </span>
+                      <span className="font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200 flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                        Staff In-Charge: {group?.coordinator_name || group?.mentor?.full_name || project.mentor?.full_name || staffMembers.find(s => s.id === group?.mentor_id || s.id === project.mentor_id)?.full_name || 'Staff Coordinator'}
+                      </span>
+                    </div>
+
                     <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-4xl">
                       {project.description}
                     </p>
@@ -331,11 +343,9 @@ export default function ProjectsPage() {
                       <div>
                         Group: <strong className="text-slate-800">{group?.name || 'Group'}</strong>
                       </div>
-                      {currentUser.role === 'admin' && (
-                        <div>
-                          Mentor: <strong className="text-blue-700">{project.mentor?.full_name || 'Assigned Mentor'}</strong>
-                        </div>
-                      )}
+                      <div>
+                        Staff In-Charge: <strong className="text-blue-700">{group?.coordinator_name || group?.mentor?.full_name || project.mentor?.full_name || staffMembers.find(s => s.id === group?.mentor_id || s.id === project.mentor_id)?.full_name || 'Staff Coordinator'}</strong>
+                      </div>
                       <div>
                         Lifecycle: <strong className="text-slate-800">
                           {[
@@ -517,26 +527,6 @@ export default function ProjectsPage() {
                     className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
-
-                {currentUser.role === 'admin' && (
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Assigned Mentor
-                    </label>
-                    <select
-                      value={editForm.mentor_id}
-                      onChange={(e) => setEditForm({ ...editForm, mentor_id: e.target.value })}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">-- Select Mentor --</option>
-                      {mentors.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.full_name} ({m.department || 'Staff Mentor'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 <div className="sm:col-span-2">
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">

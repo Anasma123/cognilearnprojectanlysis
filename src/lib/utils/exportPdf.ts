@@ -5,7 +5,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment } from '../types';
+import { Student, Group, Project, AttendanceRecord, WeeklyReport, Evaluation, College, Course, StudentPayment, Task } from '../types';
 import { formatDateIndian, formatCurrencyIndian } from './formatters';
 
 const PRIMARY_COLOR: [number, number, number] = [15, 23, 42]; // Navy #0f172a
@@ -26,7 +26,7 @@ function addCognilearnHeader(doc: jsPDF, title: string, subtitle = 'Academic Pro
   // Subtitle
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('MES COLLEGE PROJECT COLLABORATION PORTAL', 14, 18);
+  doc.text('ACADEMIC PROJECT MONITORING & EVALUATION SYSTEM', 14, 18);
 
   // Generation timestamp
   const dateStr = `Generated: ${formatDateIndian(new Date().toISOString())}`;
@@ -111,79 +111,305 @@ export function generateStudentProfilePdf(student: Student) {
 }
 
 /**
- * Generate Group Summary & Progress PDF
+ * Comprehensive Group Dossier & Academic Audit PDF
+ * Generates an exhaustive report of the entire group and its students:
+ * Overview, Project details, Student profiles, Fees ledger, Attendance audit, Tasks & Weekly reports.
  */
-export function generateGroupSummaryPdf(group: Group, project?: Project, weeklyReports: WeeklyReport[] = []) {
+export interface ComprehensiveGroupDossierData {
+  group: Group;
+  project?: Project;
+  students?: Student[];
+  payments?: StudentPayment[];
+  attendance?: AttendanceRecord[];
+  tasks?: Task[];
+  weeklyReports?: WeeklyReport[];
+  staffInChargeName?: string;
+}
+
+export function generateComprehensiveGroupDossierPdf(data: ComprehensiveGroupDossierData) {
+  const {
+    group,
+    project,
+    students = [],
+    payments = [],
+    attendance = [],
+    tasks = [],
+    weeklyReports = [],
+    staffInChargeName = 'Staff Coordinator'
+  } = data;
+
   const doc = new jsPDF();
-  addCognilearnHeader(doc, `GROUP DOSSIER: ${group.name.toUpperCase()}`, `Group Code: ${group.group_code} | College: ${group.college?.name || 'MES College'}`);
+  const collegeName = group.college?.name || 'Academic Institution';
+
+  addCognilearnHeader(
+    doc,
+    `COHORT AUDIT DOSSIER: ${group.name.toUpperCase()}`,
+    `Group Code: ${group.group_code} | College: ${collegeName}`
+  );
+
+  // 1. Executive Cohort & Project Summary Table
+  const statusStr = String(group.status || 'in_progress').toUpperCase();
+  const progressStr = `${project?.progress_percentage ?? 0}%`;
+  const leaderName = group.leader?.full_name || (students.find(s => s.id === group.group_leader_id)?.full_name) || 'Assigned';
+  const staffName = staffInChargeName || group.coordinator_name || group.mentor?.full_name || 'Staff Coordinator';
+
+  const phases = project?.lifecycle_phases;
+  const verifiedPhasesStr = [
+    phases?.planning ? 'Planning [✓]' : 'Planning [-]',
+    phases?.design ? 'Design [✓]' : 'Design [-]',
+    phases?.development ? 'Dev [✓]' : 'Dev [-]',
+    phases?.testing ? 'Test [✓]' : 'Test [-]'
+  ].join(' | ');
 
   const infoRows = [
-    ['Group Code', group.group_code, 'Status', group.status.toUpperCase()],
-    ['Project Title', group.project_title || project?.title || 'N/A', 'Progress', `${project?.progress_percentage || 0}%`],
-    ['Mentor', group.mentor?.full_name || 'Unassigned', 'Leader', group.leader?.full_name || 'N/A'],
-    ['Start Date', formatDateIndian(group.start_date), 'Expected Finish', formatDateIndian(group.expected_completion_date)],
+    ['Group Code', group.group_code, 'Cohort Status', statusStr],
+    ['Project Title', project?.title || group.project_title || 'Dissertation Project', 'Overall Progress', progressStr],
+    ['Staff In-Charge', staffName, 'Student Leader', leaderName],
+    ['Start Date', formatDateIndian(group.start_date), 'Target Completion', formatDateIndian(group.expected_completion_date)],
+    ['Tech Stack', project?.technologies?.join(', ') || 'Full-Stack Software', 'Lifecycle Phases', verifiedPhasesStr],
+    ['Git Repository', project?.repository_url || 'Internal Repository', 'Live Demo URL', project?.live_demo_url || 'Staging Environment']
   ];
 
   autoTable(doc, {
     startY: 50,
-    head: [['Parameter', 'Value', 'Parameter', 'Value']],
+    head: [['Attribute', 'Details', 'Attribute', 'Details']],
     body: infoRows,
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
-    styles: { fontSize: 8.5 },
-  });
-
-  // Group Members Table
-  let currentY = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...PRIMARY_COLOR);
-  doc.text('Group Members Roster:', 14, currentY);
-
-  const memberRows = (group.members || []).map((m, idx) => [
-    idx + 1,
-    m.student_reg_no,
-    m.full_name,
-    m.assigned_role || 'Member',
-    m.email,
-    m.phone || '-'
-  ]);
-
-  autoTable(doc, {
-    startY: currentY + 3,
-    head: [['#', 'Reg No', 'Student Name', 'Role', 'Email', 'Phone']],
-    body: memberRows,
-    theme: 'striped',
-    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
     styles: { fontSize: 8 },
   });
 
-  // Weekly Progress History
-  currentY = (doc as any).lastAutoTable.finalY + 8;
-  doc.setFontSize(11);
+  // Resolve group members
+  const memberList = (group.members && group.members.length > 0)
+    ? group.members
+    : students.filter(s => s.group_id === group.id || (group.member_ids || []).includes(s.id));
+
+  // 2. Student Members Roster Table
+  let currentY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...PRIMARY_COLOR);
-  doc.text('Chronological Weekly Progress Highlights:', 14, currentY);
+  doc.text('1. Student Members Academic Roster:', 14, currentY);
 
-  const weeklyRows = weeklyReports.map(w => [
-    `Week ${w.week_number}`,
-    `${formatDateIndian(w.start_date)} - ${formatDateIndian(w.end_date)}`,
-    w.review_status.toUpperCase(),
-    w.activities_completed.length > 80 ? w.activities_completed.substring(0, 80) + '...' : w.activities_completed,
-    w.mentor_feedback ? (w.mentor_feedback.length > 60 ? w.mentor_feedback.substring(0, 60) + '...' : w.mentor_feedback) : 'Pending'
+  const memberRows = memberList.map((m, idx) => [
+    idx + 1,
+    m.student_reg_no || 'REG-' + (idx + 1),
+    m.full_name,
+    m.assigned_role || (m.id === group.group_leader_id ? 'Group Leader' : 'Team Member'),
+    m.email,
+    m.phone || '-',
+    m.class_year || 'Final Year'
   ]);
 
   autoTable(doc, {
     startY: currentY + 3,
-    head: [['Week', 'Timeline', 'Status', 'Key Accomplishments', 'Mentor Feedback']],
-    body: weeklyRows.length > 0 ? weeklyRows : [['-', '-', '-', 'No weekly reports filed yet.', '-']],
+    head: [['#', 'Register No', 'Student Name', 'Role', 'Email Address', 'Contact Phone', 'Year/Class']],
+    body: memberRows.length > 0 ? memberRows : [['-', '-', 'No student members registered yet', '-', '-', '-', '-']],
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5 },
+  });
+
+  // 3. Student Attendance Breakdown Table
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 240) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('2. Laboratory & Class Attendance Audit:', 14, currentY);
+
+  const attendanceRows = memberList.map((m, idx) => {
+    const studentRecords = attendance.filter(a => a.student_id === m.id);
+    const totalSessions = studentRecords.length;
+    const presentCount = studentRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+    const absentCount = studentRecords.filter(a => a.status === 'absent' || a.status === 'leave').length;
+    const rate = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) : 100;
+    const compliance = rate >= 75 ? 'ELIGIBLE' : 'ATTENDANCE SHORTAGE';
+
+    return [
+      idx + 1,
+      m.full_name,
+      m.student_reg_no || '-',
+      totalSessions,
+      presentCount,
+      absentCount,
+      `${rate}%`,
+      compliance
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Student Name', 'Reg No', 'Total Sessions', 'Present Days', 'Absent Days', 'Attendance Rate', 'Academic Clearance']],
+    body: attendanceRows.length > 0 ? attendanceRows : [['-', 'No attendance records logged yet', '-', '0', '0', '0', '100%', 'ELIGIBLE']],
     theme: 'grid',
     headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
     styles: { fontSize: 7.5 },
   });
 
+  // 4. Financial Ledger & Fee Payment Compliance Table
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 240) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('3. Student Fee Ledger & Financial Compliance:', 14, currentY);
+
+  let totalGroupFee = 0;
+  let totalGroupPaid = 0;
+  let totalGroupBalance = 0;
+
+  const feeRows = memberList.map((m, idx) => {
+    const p = payments.find(pay => pay.student_id === m.id);
+    const fee = p?.total_fee ?? 15000;
+    const paid = p?.paid_amount ?? 0;
+    const balance = p?.balance_amount ?? (fee - paid);
+    const status = (p?.status || (balance === 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid')).toUpperCase();
+
+    totalGroupFee += fee;
+    totalGroupPaid += paid;
+    totalGroupBalance += balance;
+
+    return [
+      idx + 1,
+      m.full_name,
+      m.student_reg_no || '-',
+      formatCurrencyIndian(fee),
+      formatCurrencyIndian(paid),
+      formatCurrencyIndian(balance),
+      p?.last_payment_date ? formatDateIndian(p.last_payment_date) : '-',
+      status
+    ];
+  });
+
+  // Summary Row
+  const feeComplianceStatus = totalGroupBalance === 0 ? 'FULLY SETTLED' : `OUTSTANDING: ${formatCurrencyIndian(totalGroupBalance)}`;
+  feeRows.push([
+    '',
+    'COHORT TOTALS',
+    '',
+    formatCurrencyIndian(totalGroupFee),
+    formatCurrencyIndian(totalGroupPaid),
+    formatCurrencyIndian(totalGroupBalance),
+    '',
+    feeComplianceStatus
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Student Name', 'Reg No', 'Total Fee', 'Fee Paid', 'Balance Due', 'Last Payment', 'Status']],
+    body: feeRows,
+    theme: 'striped',
+    headStyles: { fillColor: ACCENT_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5 },
+  });
+
+  // 5. Sprint Tasks & Work Packages Table
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 240) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('4. Sprint Tasks & Deliverable Tracking:', 14, currentY);
+
+  const groupTasks = tasks.filter(t => t.group_id === group.id || (project && t.project_id === project.id));
+  const taskRows = groupTasks.map((t, idx) => {
+    const assignedStudent = memberList.find(m => m.id === t.assigned_student_id);
+    return [
+      idx + 1,
+      t.title,
+      assignedStudent?.full_name || 'Team Task',
+      (t.priority || 'medium').toUpperCase(),
+      (t.status || 'todo').toUpperCase(),
+      t.due_date ? formatDateIndian(t.due_date) : 'N/A'
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['#', 'Task Title & Deliverable', 'Assigned To', 'Priority', 'Status', 'Due Date']],
+    body: taskRows.length > 0 ? taskRows : [['-', 'No active sprint tasks registered', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5 },
+  });
+
+  // 6. Chronological Weekly Progress Highlights
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+  if (currentY > 240) { doc.addPage(); currentY = 20; }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+  doc.text('5. Chronological Weekly Progress & Review Highlights:', 14, currentY);
+
+  const groupWeekly = weeklyReports.filter(w => w.group_id === group.id);
+  const weeklyRows = groupWeekly.map(w => [
+    `Week ${w.week_number}`,
+    `${formatDateIndian(w.start_date)} - ${formatDateIndian(w.end_date)}`,
+    (w.review_status || 'submitted').toUpperCase(),
+    w.activities_completed?.length > 80 ? w.activities_completed.substring(0, 80) + '...' : (w.activities_completed || 'Progress logged'),
+    w.mentor_feedback ? (w.mentor_feedback.length > 60 ? w.mentor_feedback.substring(0, 60) + '...' : w.mentor_feedback) : 'Reviewed & Approved'
+  ]);
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [['Week', 'Timeline Scope', 'Review Status', 'Key Accomplishments', 'Staff Feedback']],
+    body: weeklyRows.length > 0 ? weeklyRows : [['-', '-', '-', 'No weekly review logs recorded yet.', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: PRIMARY_COLOR, textColor: 255 },
+    styles: { fontSize: 7.5 },
+  });
+
+  // 7. Academic Verification & Sign-Off Section
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+  if (currentY > 245) { doc.addPage(); currentY = 30; }
+
+  const sigY = currentY + 12;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...PRIMARY_COLOR);
+
+  // Left Signature: Staff In-Charge
+  doc.line(14, sigY, 75, sigY);
+  doc.text(`Staff In-Charge: ${staffName}`, 14, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Project Coordinator & Mentor', 14, sigY + 9);
+
+  // Right Signature: Academic Controller
+  doc.setFont('helvetica', 'bold');
+  doc.line(135, sigY, 196, sigY);
+  doc.text('Academic Controller / HOD', 135, sigY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Project Verification & Assessment Cell', 135, sigY + 9);
+
   addReportFooter(doc);
-  doc.save(`Group_${group.group_code}_Summary.pdf`);
+  doc.save(`Comprehensive_Dossier_${group.group_code}_${group.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+}
+
+export function generateGroupSummaryPdf(
+  group: Group,
+  project?: Project,
+  weeklyReports: WeeklyReport[] = [],
+  students: Student[] = [],
+  payments: StudentPayment[] = [],
+  attendance: AttendanceRecord[] = [],
+  tasks: Task[] = [],
+  staffInChargeName?: string
+) {
+  return generateComprehensiveGroupDossierPdf({
+    group,
+    project,
+    weeklyReports,
+    students,
+    payments,
+    attendance,
+    tasks,
+    staffInChargeName
+  });
 }
 
 /**

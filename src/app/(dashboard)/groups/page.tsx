@@ -54,7 +54,7 @@ export default function GroupsPage() {
             Academic Project Groups
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            MES College project cohorts, student leader assignments, mentors, and deliverables.
+            Academic project cohorts, student leader assignments, staff coordinators, and deliverables.
           </p>
         </div>
 
