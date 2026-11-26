@@ -134,7 +134,7 @@ export function AnalyticsCharts() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Group Progress Comparison (%)</h3>
-            <p className="text-xs text-slate-500">Calculated objectively from milestones & priority-weighted tasks</p>
+            <p className="text-xs text-slate-500">Calculated objectively from verified lifecycle phases & priority-weighted tasks</p>
           </div>
           <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold">
             Term Avg: {termAvg}%

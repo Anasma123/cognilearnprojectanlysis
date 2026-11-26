@@ -387,7 +387,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [students, setStudents] = useState<Student[]>(() => loadFromStorage('cognilearn_students', initialStudents));
   const [groups, setGroups] = useState<Group[]>(() => loadFromStorage('cognilearn_groups', initialGroups));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage('cognilearn_projects', initialProjects));
-  const [milestones, setMilestones] = useState<ProjectMilestone[]>(() => loadFromStorage('cognilearn_milestones', initialMilestones));
+  const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('cognilearn_tasks', initialTasks));
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>(() => loadFromStorage('cognilearn_weekly', initialWeeklyReports));
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage('cognilearn_attendance', initialAttendance));
@@ -668,7 +668,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         manualOverride = false;
       } else if (!manualOverride) {
         progress = calculateComputedProgress(
-          pMilestones,
+          [],
           pTasks,
           p.presentations,
           p.lifecycle_phases,
@@ -1314,39 +1314,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       setProjects(prev => [newProject, ...prev]);
       cloudUpsert('projects', newProject, ['group', 'mentor', 'milestones', 'tasks']);
-
-      // Automatically create the 13 standard developmental stages for this project
-      const defaultSteps = [
-        'Requirement Analysis',
-        'Problem Identification',
-        'Research and Documentation',
-        'System Architecture',
-        'UI/UX Design',
-        'Database Design',
-        'Backend Development',
-        'Frontend Development',
-        'Integration',
-        'Testing',
-        'Bug Fixing',
-        'Final Documentation',
-        'Final Presentation'
-      ];
-      const initialGroupMilestones: ProjectMilestone[] = defaultSteps.map((stepName, idx) => ({
-        id: generateUUID(),
-        project_id: newProjectId,
-        step_order: idx + 1,
-        name: stepName,
-        description: `Academic milestone phase ${idx + 1} for ${newProject.title}.`,
-        assigned_student_id: newGroup.group_leader_id,
-        start_date: data.start_date,
-        due_date: data.expected_completion_date,
-        status: 'pending' as const,
-        is_custom: false,
-        created_at: now,
-        updated_at: now
-      }));
-      setMilestones(prev => [...prev, ...initialGroupMilestones]);
-      cloudInsertMany('project_milestones', initialGroupMilestones, ['assigned_student']);
     }
 
     logActivity('GROUP_CREATED', 'group', `Formed cohort ${data.name} (${data.group_code}) with ${validMemberIds.length} students`, newGroupId);
@@ -1636,7 +1603,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updated.manual_progress_override = false;
       } else if (!updated.manual_progress_override) {
         updated.progress_percentage = calculateComputedProgress(
-          pMilestones,
+          [],
           pTasks,
           updated.presentations,
           updated.lifecycle_phases,

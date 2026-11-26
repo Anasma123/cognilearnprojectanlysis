@@ -34,17 +34,24 @@ export default function AnalyticsPage() {
     { name: 'Low', count: lowTasks, fill: '#10b981' }
   ];
 
-  // Milestone status breakdown
-  const completedM = milestones.filter(m => m.status === 'completed').length;
-  const inProgressM = milestones.filter(m => m.status === 'in_progress').length;
-  const underReviewM = milestones.filter(m => m.status === 'under_review').length;
-  const pendingM = milestones.filter(m => m.status === 'pending').length;
+  // Verified Lifecycle Phases breakdown across projects
+  let verifiedPlanning = 0;
+  let verifiedDesign = 0;
+  let verifiedDevelopment = 0;
+  let verifiedTesting = 0;
 
-  const milestoneData = [
-    { name: 'Completed', value: completedM, color: '#10b981' },
-    { name: 'In Progress', value: inProgressM, color: '#3b82f6' },
-    { name: 'Under Review', value: underReviewM, color: '#a855f7' },
-    { name: 'Pending', value: pendingM, color: '#94a3b8' }
+  projects.forEach(p => {
+    if (p.lifecycle_phases?.planning) verifiedPlanning++;
+    if (p.lifecycle_phases?.design) verifiedDesign++;
+    if (p.lifecycle_phases?.development) verifiedDevelopment++;
+    if (p.lifecycle_phases?.testing) verifiedTesting++;
+  });
+
+  const lifecycleData = [
+    { name: 'Planning Verified', value: verifiedPlanning, color: '#3b82f6' },
+    { name: 'Design Verified', value: verifiedDesign, color: '#a855f7' },
+    { name: 'Development Verified', value: verifiedDevelopment, color: '#10b981' },
+    { name: 'Testing Verified', value: verifiedTesting, color: '#f59e0b' }
   ].filter(d => d.value > 0);
 
   return (
@@ -95,21 +102,21 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Milestone Lifecycle Distribution */}
+        {/* Lifecycle Phase Verification Distribution */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-900">Milestone Stage Completion</h3>
-            <p className="text-xs text-slate-500">Distribution across 13 standard academic development stages</p>
+            <h3 className="text-sm font-bold text-slate-900">Lifecycle Phase Completion</h3>
+            <p className="text-xs text-slate-500">Distribution across Planning, Design, Development & Testing verification</p>
           </div>
 
           <div className="h-64 w-full flex items-center justify-center">
-            {milestoneData.length === 0 ? (
-              <p className="text-xs text-slate-400">No milestone data recorded yet.</p>
+            {lifecycleData.length === 0 ? (
+              <p className="text-xs text-slate-400">No verified lifecycle phases recorded yet.</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={milestoneData}
+                    data={lifecycleData}
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
@@ -118,7 +125,7 @@ export default function AnalyticsPage() {
                     outerRadius={80}
                     paddingAngle={4}
                   >
-                    {milestoneData.map((entry, index) => (
+                    {lifecycleData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>

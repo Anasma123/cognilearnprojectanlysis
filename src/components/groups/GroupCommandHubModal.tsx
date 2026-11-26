@@ -37,7 +37,7 @@ interface GroupCommandHubModalProps {
   group: Group;
 }
 
-type ActiveTab = 'members' | 'project' | 'milestones' | 'tasks' | 'weekly' | 'attendance' | 'payments';
+type ActiveTab = 'members' | 'project' | 'tasks' | 'weekly' | 'attendance' | 'payments';
 
 export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHubModalProps) {
   const {
@@ -377,18 +377,6 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
           </button>
 
           <button
-            onClick={() => setActiveTab('milestones')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 font-bold rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'milestones'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Milestone className="w-3.5 h-3.5" />
-            13 Milestones ({groupMilestones.filter(m => m.status === 'completed').length}/13)
-          </button>
-
-          <button
             onClick={() => setActiveTab('tasks')}
             className={`flex items-center gap-1.5 px-3.5 py-2 font-bold rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'tasks'
@@ -568,91 +556,7 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
           </div>
         )}
 
-        {/* Tab 3: Milestones (13 Steps) */}
-        {activeTab === 'milestones' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">Project Development Timeline (13 Steps)</h3>
-                <p className="text-xs text-slate-500">
-                  Official capstone lifecycle phases from requirement analysis through final evaluation.
-                </p>
-              </div>
-
-              {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
-                <button
-                  onClick={() => setShowAddMilestoneModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Custom Step
-                </button>
-              )}
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
-              {groupMilestones.map((ms) => {
-                const assignedStudent = students.find(s => s.id === ms.assigned_student_id);
-
-                return (
-                  <div key={ms.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50 text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                        ms.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : ms.status === 'in_progress'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {ms.step_order}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">{ms.name}</span>
-                          {ms.is_custom && (
-                            <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 text-[10px] font-bold">
-                              Custom
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Assigned: {assignedStudent?.full_name || 'Group'} • Due: {ms.due_date ? formatDateIndian(ms.due_date) : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <StatusBadge status={ms.status} />
-
-                      {(currentUser.role === 'admin' || currentUser.role === 'staff') && (
-                        <div className="flex items-center gap-1">
-                          {ms.status !== 'completed' ? (
-                            <button
-                              onClick={() => updateMilestone(ms.id, { status: 'completed', completion_date: new Date().toISOString().split('T')[0] })}
-                              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded font-semibold text-[11px] transition-colors"
-                            >
-                              Approve Step
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => updateMilestone(ms.id, { status: 'in_progress' })}
-                              className="px-2 py-1 text-slate-400 hover:text-slate-600 rounded text-[10px]"
-                            >
-                              Reopen
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: Tasks */}
+        {/* Tab 3: Tasks */}
         {activeTab === 'tasks' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1283,58 +1187,6 @@ export function GroupCommandHubModal({ isOpen, onClose, group }: GroupCommandHub
                 className="px-4 py-1.5 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700"
               >
                 Confirm Payment
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Sub-modal: Add Custom Milestone Step */}
-      {showAddMilestoneModal && (
-        <Modal
-          isOpen={true}
-          onClose={() => setShowAddMilestoneModal(false)}
-          title={`Add Custom Step to ${group.name}`}
-          subtitle="Insert a milestone stage"
-          maxWidth="md"
-        >
-          <form onSubmit={handleCreateMilestone} className="space-y-3 text-xs">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Milestone Step Name *</label>
-              <input
-                type="text"
-                required
-                value={newMilestoneData.name}
-                onChange={(e) => setNewMilestoneData({ ...newMilestoneData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
-                placeholder="e.g. Cloud Architecture Setup"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Description</label>
-              <input
-                type="text"
-                value={newMilestoneData.description}
-                onChange={(e) => setNewMilestoneData({ ...newMilestoneData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
-                placeholder="Details of the milestone..."
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowAddMilestoneModal(false)}
-                className="px-3 py-1.5 border border-slate-200 text-slate-700 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700"
-              >
-                Add Milestone
               </button>
             </div>
           </form>

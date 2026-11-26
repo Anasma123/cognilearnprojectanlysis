@@ -366,7 +366,7 @@ export default function WeeklyProgressPage() {
         lifecycle_status: d.project?.status.toUpperCase() || 'PLANNING',
         progress_percentage: d.progress,
         presentations_summary: `${d.presentationsCount} Round(s)`,
-        milestones_summary: `${d.completedMilestones} / ${d.totalMilestones} Done`,
+        milestones_summary: `${[d.project?.lifecycle_phases?.planning, d.project?.lifecycle_phases?.design, d.project?.lifecycle_phases?.development, d.project?.lifecycle_phases?.testing].filter(Boolean).length} / 4 Lifecycle Verified`,
         tasks_summary: `${d.completedTasks} / ${d.totalTasks} Done`,
         attendance_rate: `${d.attendanceRate}% (${d.presentAttendance}/${d.totalAttendance})`,
         fee_total: d.feeTotal,
@@ -674,7 +674,7 @@ export default function WeeklyProgressPage() {
                 <option value="ALL">All System Audit Events</option>
                 <option value="TASKS">Task Deliverables</option>
                 <option value="ATTENDANCE">Attendance Marking</option>
-                <option value="PROJECTS">Project Lifecycle & Milestones</option>
+                <option value="PROJECTS">Project Lifecycle</option>
                 <option value="PAYMENTS">Fee Transactions</option>
                 <option value="GROUPS">Group & Student Changes</option>
               </select>

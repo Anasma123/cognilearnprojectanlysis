@@ -162,40 +162,30 @@ export function calculateComputedProgress(
   // 6. Objective Blended Progress Calculation
   let computed = 0;
 
-  if (hasMilestones && hasTasks) {
-    // Both milestones and tasks are active
-    if (phaseScore > 0 && hasPresentations) {
-      computed = milestoneScore * 0.45 + taskScore * 0.35 + phaseScore * 0.12 + presScore * 0.08;
-    } else if (phaseScore > 0) {
-      computed = milestoneScore * 0.50 + taskScore * 0.38 + phaseScore * 0.12;
-    } else if (hasPresentations) {
-      computed = milestoneScore * 0.50 + taskScore * 0.40 + presScore * 0.10;
+  if (hasTasks && phaseScore > 0) {
+    // Both verified lifecycle phases and priority-weighted tasks are active
+    if (hasPresentations) {
+      computed = phaseScore * 0.45 + taskScore * 0.45 + presScore * 0.10;
     } else {
-      computed = milestoneScore * 0.55 + taskScore * 0.45;
+      computed = phaseScore * 0.50 + taskScore * 0.50;
     }
-  } else if (hasMilestones && !hasTasks) {
-    if (phaseScore > 0) {
-      computed = milestoneScore * 0.75 + phaseScore * 0.25;
-    } else if (hasPresentations) {
-      computed = milestoneScore * 0.85 + presScore * 0.15;
+  } else if (!hasTasks && phaseScore > 0) {
+    // Verified lifecycle phases drive progress directly
+    if (hasPresentations) {
+      computed = phaseScore * 0.85 + presScore * 0.15;
     } else {
-      computed = milestoneScore;
+      computed = phaseScore;
     }
-  } else if (!hasMilestones && hasTasks) {
-    if (phaseScore > 0) {
-      computed = taskScore * 0.75 + phaseScore * 0.25;
-    } else if (hasPresentations) {
+  } else if (hasTasks && phaseScore === 0) {
+    // Tasks drive progress
+    if (hasPresentations) {
       computed = taskScore * 0.85 + presScore * 0.15;
     } else {
       computed = taskScore;
     }
   } else {
-    // Neither milestones nor tasks recorded yet
-    if (phaseScore > 0 && hasPresentations) {
-      computed = phaseScore * 0.75 + presScore * 0.25;
-    } else if (phaseScore > 0) {
-      computed = phaseScore;
-    } else if (hasPresentations) {
+    // Initial stage: estimate based on lifecycle status
+    if (hasPresentations) {
       computed = presScore;
     } else {
       switch (normStatus) {
@@ -219,12 +209,11 @@ export function calculateComputedProgress(
     computed = Math.min(95, computed);
   }
 
-  // If all milestones and tasks are 100% completed
+  // If all lifecycle phases and tasks are 100% completed
   if (
-    (!hasMilestones || milestoneScore === 100) &&
+    phaseScore === 100 &&
     (!hasTasks || (!hasOpenTasks && taskScore === 100)) &&
-    (!hasPresentations || presScore === 100) &&
-    (hasMilestones || hasTasks || phaseScore === 100)
+    (!hasPresentations || presScore === 100)
   ) {
     return 100;
   }

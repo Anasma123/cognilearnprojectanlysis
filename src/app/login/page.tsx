@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context/AppContext';
-import { Lock, User, AlertCircle, ArrowRight, Eye, EyeOff, ShieldCheck, UserCheck } from 'lucide-react';
+import { Lock, User, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,12 +47,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleFillCredentials = (user: string, pass: string) => {
-    setUsername(user);
-    setPassword(pass);
-    setError('');
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 relative overflow-hidden">
       {/* Background ambient lighting */}
@@ -74,26 +68,6 @@ export default function LoginPage() {
           <p className="text-xs text-slate-500 font-medium">
             Academic Project Tracking & Monitoring System
           </p>
-        </div>
-
-        {/* Quick Role Fill Pills */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => handleFillCredentials('admin', '123')}
-            className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-900 font-semibold transition-all cursor-pointer text-left"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-            <span>Admin (admin)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleFillCredentials('staff', '123')}
-            className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-blue-900 font-semibold transition-all cursor-pointer text-left"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span>Staff (staff)</span>
-          </button>
         </div>
 
         {/* Error Alert */}

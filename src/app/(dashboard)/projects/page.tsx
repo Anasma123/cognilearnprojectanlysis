@@ -184,7 +184,7 @@ export default function ProjectsPage() {
       const isCompleted = editForm.status === 'completed' || allPhasesDone;
 
       const computed = isCompleted ? 100 : calculateComputedProgress(
-        milestones.filter(m => m.project_id === projectToEdit.id),
+        [],
         tasks.filter(t => t.project_id === projectToEdit.id || (projectToEdit.group_id && t.group_id === projectToEdit.group_id)),
         editForm.presentations,
         editForm.lifecycle_phases,
@@ -331,11 +331,20 @@ export default function ProjectsPage() {
                       <div>
                         Group: <strong className="text-slate-800">{group?.name || 'Group'}</strong>
                       </div>
+                      {currentUser.role === 'admin' && (
+                        <div>
+                          Mentor: <strong className="text-blue-700">{project.mentor?.full_name || 'Assigned Mentor'}</strong>
+                        </div>
+                      )}
                       <div>
-                        Mentor: <strong className="text-blue-700">{project.mentor?.full_name || 'Assigned Mentor'}</strong>
-                      </div>
-                      <div>
-                        Milestones: <strong className="text-slate-800">{completedCount} of {pMilestones.length || 13} done</strong>
+                        Lifecycle: <strong className="text-slate-800">
+                          {[
+                            project.lifecycle_phases?.planning,
+                            project.lifecycle_phases?.design,
+                            project.lifecycle_phases?.development,
+                            project.lifecycle_phases?.testing
+                          ].filter(Boolean).length} of 4 verified
+                        </strong>
                       </div>
                       <div>
                         Target Date: <strong className="text-slate-800">{formatDateIndian(project.expected_completion_date)}</strong>
@@ -509,23 +518,25 @@ export default function ProjectsPage() {
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Assigned Mentor
-                  </label>
-                  <select
-                    value={editForm.mentor_id}
-                    onChange={(e) => setEditForm({ ...editForm, mentor_id: e.target.value })}
-                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">-- Select Mentor --</option>
-                    {mentors.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.full_name} ({m.department || 'Staff Mentor'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {currentUser.role === 'admin' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Assigned Mentor
+                    </label>
+                    <select
+                      value={editForm.mentor_id}
+                      onChange={(e) => setEditForm({ ...editForm, mentor_id: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">-- Select Mentor --</option>
+                      {mentors.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.full_name} ({m.department || 'Staff Mentor'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="sm:col-span-2">
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -734,7 +745,7 @@ export default function ProjectsPage() {
                           : (editForm.manual_progress_override
                             ? editForm.progress_percentage
                             : calculateComputedProgress(
-                                milestones.filter(m => m.project_id === projectToEdit.id),
+                                [],
                                 tasks.filter(t => t.project_id === projectToEdit.id || (projectToEdit.group_id && t.group_id === projectToEdit.group_id)),
                                 editForm.presentations,
                                 editForm.lifecycle_phases,

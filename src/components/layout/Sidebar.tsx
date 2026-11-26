@@ -96,13 +96,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       permKey: 'assign_tasks'
     },
     {
-      title: 'Milestones',
-      href: '/milestones',
-      icon: Milestone,
-      badge: null,
-      roles: ['admin', 'staff', 'mentor', 'student']
-    },
-    {
       title: 'Weekly Progress',
       href: '/weekly-progress',
       icon: CalendarCheck2,
@@ -169,18 +162,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Backdrop overlay when open - clicking it closes sidebar */}
+      {/* Backdrop overlay when open on mobile - clicking it closes sidebar */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      {/* Slide-out Sidebar Drawer - Not fixed/permanent, only opens when requested */}
+      {/* Persistent Left Sidebar on Desktop (lg:translate-x-0) & Slide-out Drawer on Mobile */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-80 bg-slate-900 text-white flex flex-col border-r border-slate-800 shadow-2xl transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col border-r border-slate-800 shadow-xl transition-transform duration-300 ease-in-out lg:translate-x-0 lg:pointer-events-auto ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
         }`}
       >
@@ -200,10 +193,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
           </div>
 
-          {/* Close Button */}
+          {/* Close Button (mobile only) */}
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
             title="Close menu"
           >
             <X className="w-5 h-5" />

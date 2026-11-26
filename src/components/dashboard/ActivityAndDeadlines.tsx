@@ -57,7 +57,7 @@ export function ActivityAndDeadlines() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Upcoming Deadlines</h3>
-            <p className="text-xs text-slate-500">Approaching milestones & tasks</p>
+            <p className="text-xs text-slate-500">Approaching project targets & tasks</p>
           </div>
           <Link href="/tasks" className="text-xs text-blue-600 hover:underline font-semibold">
             All Tasks

@@ -52,8 +52,8 @@ export default function DashboardLayout({
         {/* Slide-out Sidebar Drawer (opens when hamburger is clicked) */}
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        {/* Main Full-Width Application Container */}
-        <div className="flex-1 flex flex-col min-h-screen w-full">
+        {/* Main Application Container (offset by left sidebar width on desktop) */}
+        <div className="flex-1 flex flex-col min-h-screen w-full lg:pl-64">
           <TopNav onToggleSidebar={() => setSidebarOpen(true)} />
           <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
             <ClientErrorBoundary>
